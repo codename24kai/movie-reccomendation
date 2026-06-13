@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Film Forum Dashboard</title>
+<!-- Tailwind CSS v3 CDN -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Google Fonts: Inter for a modern sans-serif look -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Font Awesome for Icons -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+<style data-purpose="custom-base-styles">
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #0f0f0f;
+      color: #ffffff;
+      overflow-x: hidden;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #333;
+      border-radius: 10px;
+    }
+    .active-nav-item {
+      background-color: rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+    }
+  </style>
+<style data-purpose="component-styles">
+    /* Hero Section specific styles */
+    .hero-gradient {
+      background: linear-gradient(90deg, rgba(15,15,15,0.9) 0%, rgba(15,15,15,0.4) 50%, rgba(15,15,15,0) 100%);
+    }
+    /* Rating Badge Blur */
+    .glass-badge {
+      background: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(4px);
+    }
+    /* Actor Avatar Ring */
+    .actor-ring {
+      padding: 2px;
+      background: linear-gradient(to bottom right, #ff8a00, #e52e71);
+      border-radius: 50%;
+    }
+  </style>
+</head>
+<body class="h-screen flex overflow-hidden">
+<!-- BEGIN: Sidebar -->
+<aside class="w-64 bg-[#121212] flex flex-col border-r border-white/5 flex-shrink-0" data-purpose="sidebar">
+<div class="p-6 flex items-center space-x-3">
+<div class="bg-indigo-600 p-1.5 rounded-md">
+<i class="fas fa-film text-white text-lg"></i>
+</div>
+<h1 class="text-xl font-bold tracking-tight">Film Forum</h1>
+</div>
+<nav class="flex-1 px-4 space-y-2 mt-4">
+<a class="flex items-center space-x-3 p-3 active-nav-item text-white" href="#">
+<i class="fas fa-home w-5 text-center"></i>
+<span class="font-medium">Home</span>
+</a>
+<a class="flex items-center space-x-3 p-3 text-zinc-400 hover:text-white transition-colors" href="#">
+<i class="fas fa-bookmark w-5 text-center"></i>
+<span class="font-medium">Wishlist</span>
+</a>
+<a class="flex items-center space-x-3 p-3 text-zinc-400 hover:text-white transition-colors" href="#">
+<i class="fas fa-users w-5 text-center"></i>
+<span class="font-medium">Communities</span>
+</a>
+<a class="flex items-center space-x-3 p-3 text-zinc-400 hover:text-white transition-colors" href="#">
+<i class="fas fa-fire w-5 text-center"></i>
+<span class="font-medium">Trending</span>
+</a>
+</nav>
+<div class="p-4 border-t border-white/5">
+<a class="flex items-center space-x-3 p-3 text-zinc-400 hover:text-white transition-colors" href="#">
+<i class="fas fa-user-circle w-5 text-center"></i>
+<span class="font-medium">My Profile</span>
+</a>
+</div>
+</aside>
+<!-- END: Sidebar -->
+<!-- Main Wrapper -->
+<div class="flex-1 flex flex-col min-w-0">
+<!-- BEGIN: TopBar -->
+<header class="h-16 bg-[#121212] flex items-center justify-between px-8 border-b border-white/5" data-purpose="top-bar">
+<!-- Search -->
+<div class="relative w-96">
+<i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"></i>
+<input class="w-full bg-zinc-800/50 border-none rounded-lg pl-10 pr-4 py-2 text-sm focus:ring-1 focus:ring-zinc-500 text-zinc-200" placeholder="Search" type="text"/>
+</div>
+<!-- User Profile -->
+<div class="flex items-center space-x-6">
+<div class="relative">
+<i class="far fa-bell text-zinc-400 text-xl cursor-pointer hover:text-white transition-colors"></i>
+<span class="absolute -top-1 -right-1 w-2 h-2 bg-orange-500 rounded-full border border-[#121212]"></span>
+</div>
+<div class="flex items-center space-x-3 cursor-pointer">
+<img alt="User Profile" class="w-8 h-8 rounded-full border border-white/10" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD99zHqfWaRp5wi1VU_UqxbPMKGQ7Wucfj3qvZPC7_taxRzvMLk--yRJkzyee2qxR7cFbTaJENnVYfsVMzXvGQ6E2QSYufAe3ExdCTSQVm1kqx7PxHqrrqlAjzyMYf5QJnw2HBqchsMoELwzQIys9daRR2FCSO7H_nUWCj4rVZnNUAj0s4N3hkghycuf8X4vBNHnoPUrw4bE_Sf234S1OfM1KjbTg7VWnq7AFdwR-1ZwlJFBhl1qWb78chKdzKnkYHcK6quCOTrMrdY"/>
+<span class="text-sm font-medium text-zinc-300">Film Forum</span>
+<i class="fas fa-chevron-down text-xs text-zinc-500"></i>
+</div>
+</div>
+</header>
+<!-- END: TopBar -->
+<!-- Main Scrollable Area -->
+<main class="flex-1 overflow-y-auto p-8 space-y-10 custom-scrollbar">
+<div class="flex flex-col lg:flex-row gap-8">
+<!-- Center Content -->
+<div class="flex-1 min-w-0 space-y-10">
+<!-- BEGIN: Hero Section -->
+<section class="relative h-80 rounded-3xl overflow-hidden shadow-2xl group" data-purpose="hero-carousel">
+<!-- Hero BG -->
+<img alt="Dune Background" class="absolute inset-0 w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBAQbqxam2ePmwtbygWRdRgdvMJg4CyMpaEK_brPilizm52tFYsYv_H8DTuZuLWNEyC_TKNlhnRr72cJr1yCZptVntCoOgE51CCQHFceK5NwZNBOLRIpHP2ch-jNtvlkCxDJmjPKnhPQN2KUf6M9i5JtSGCpBflD0GVYozi4J5A9nFrPYPIMtp19NYMXVZunq1Ygyub_6YukwQl5DaWYulu0cLMf0SUqqP_hCIi4keA_sbB9BDPwV4rS45UnkGIdvYw1JsMCbiDtj8N"/>
+<div class="absolute inset-0 hero-gradient"></div>
+<div class="relative h-full flex items-center p-8 space-x-8">
+<!-- Movie Poster Mini -->
+<div class="flex-shrink-0">
+<img alt="Dune Poster" class="w-40 h-60 object-cover rounded-xl shadow-lg border border-white/10" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDjFsB6GIICmpT7ofwmsHsVou4SAJ28WwM3vH5l96GfC9XWgp80-QPiv-2qELDq1Ki7gfiqW7JpNPmXI00HdlMjkchIMQnKTyrbzgTkGX39paa7ACFnocxsH2y1vcUzMdeMoeVy8OS09Sn0Y_TwKeNx8rkeZ48m0zsLv3anynfeqUzkz0zm8XCfLMFFfDFQO1j0olSmFDKMXNrrM_r-MAG25i4aBC1VZ5iTR2VhIqMUjKXzzk1V3Ek5WTqxPWTQF5yLXr3Mu3exhdFh"/>
+</div>
+<!-- Content -->
+<div class="max-w-xl space-y-4">
+<div class="flex flex-col">
+<span class="text-zinc-300 text-sm font-medium mb-1">Movie of the Day</span>
+<h2 class="text-5xl font-bold text-white">Dune: Part Two</h2>
+</div>
+<p class="text-zinc-300 text-sm leading-relaxed line-clamp-3">
+                  The film of tensions along coalition movie forest and hierarchies the strong battle mill. Get ready, synopsis can take you back into the masterpiece of cinema.
+                </p>
+<div class="flex items-center space-x-4 pt-2">
+<button class="bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 rounded-xl font-bold transition-all transform active:scale-95 shadow-lg">
+                    Write an Opinion
+                  </button>
+<!-- Carousel Dots -->
+<div class="flex space-x-2">
+<span class="w-2 h-2 rounded-full bg-white"></span>
+<span class="w-2 h-2 rounded-full bg-white/40"></span>
+<span class="w-2 h-2 rounded-full bg-white/40"></span>
+<span class="w-2 h-2 rounded-full bg-white/40"></span>
+</div>
+</div>
+</div>
+</div>
+<!-- Rating Badge -->
+<div class="absolute top-6 right-6 glass-badge px-3 py-1.5 rounded-lg flex items-center space-x-1 border border-white/10">
+<i class="fas fa-star text-yellow-400 text-xs"></i>
+<span class="text-white font-bold text-sm">92%</span>
+</div>
+</section>
+<!-- END: Hero Section -->
+<!-- BEGIN: Recommended Section -->
+<section data-purpose="recommended-movies">
+<div class="flex items-center justify-between mb-6">
+<div class="flex items-center space-x-6">
+<h3 class="text-xl font-bold">Recommended for You</h3>
+<div class="flex space-x-2">
+<span class="px-4 py-1.5 bg-zinc-800 text-zinc-400 text-xs font-semibold rounded-full border border-white/5 cursor-pointer hover:bg-zinc-700 transition-colors">Based on Rating</span>
+<span class="px-4 py-1.5 bg-zinc-800 text-zinc-400 text-xs font-semibold rounded-full border border-white/5 cursor-pointer hover:bg-zinc-700 transition-colors">Based on Genre</span>
+</div>
+</div>
+<div class="flex space-x-2">
+<button class="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white border border-white/5"><i class="fas fa-chevron-left text-xs"></i></button>
+<button class="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white border border-white/5"><i class="fas fa-chevron-right text-xs"></i></button>
+</div>
+</div>
+<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+<!-- Movie Card -->
+<div class="group cursor-pointer">
+<div class="relative aspect-[2/3] rounded-2xl overflow-hidden mb-3">
+<img alt="Everything Everywhere" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAyKVhErnZ042lnKEa16PtGI9DGIohN7MW8PDi1U9qrzdMoBqnbzQGXnjOE4c2HHYpGBwAQDprLW_MPSKCu4_RGYhHvaIsmH516tHCBfm37ffHYzW91L1v3IUHBPPkUEfuf14NZb8elDhBBKjhPCYnR_tE7zGF8b_N2GxrfPrXijbIevMJVq0M54hH9zf3wyrJSvqGbVd9ulCrWGzlwRsVP_A1stjNJ-QXLkkCX6al-W6Q2vnVYjXQ0_gZLvJRGxY5bQLP5fPOGKWk1"/>
+</div>
+<h4 class="text-sm font-semibold text-zinc-100 truncate">Everything Everywhere All At Once</h4>
+<div class="flex items-center text-xs text-zinc-500 mt-1">
+<i class="fas fa-star text-orange-500 mr-1 text-[10px]"></i>
+<span>4.8</span>
+</div>
+</div>
+<div class="group cursor-pointer">
+<div class="relative aspect-[2/3] rounded-2xl overflow-hidden mb-3">
+<img alt="Past Lives" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCbAw0vnquPgiX2A-QdyqR1Am_wTrp0kb_8-loHpWSZXRa5zsjCFGj6MQj0QGJRYQfObKsyP6apdDditVTp2RIWhySQov2EFGMNdElHUTEU0BD-GiSiK-U8xXDOrP1KLx4_UqnAq-PcKLiN1MKfli_xxSx9wU4QPdkuKdbH5ft8HgXhG_h1tUSRacrfaXmlBws50QplIixArdCflC2wiyelap7K2tMKN9QZd_OFAzTiqCc0RjCWEpBUMyiyOS88yqZwZQlbcQLE2hBa"/>
+</div>
+<h4 class="text-sm font-semibold text-zinc-100 truncate">Past Lives</h4>
+<div class="flex items-center text-xs text-zinc-500 mt-1">
+<i class="fas fa-star text-orange-500 mr-1 text-[10px]"></i>
+<span>4.8</span>
+</div>
+</div>
+<div class="group cursor-pointer">
+<div class="relative aspect-[2/3] rounded-2xl overflow-hidden mb-3">
+<img alt="The Godfather" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDBf40LUbU3q925Vs5lBINB9aFhao_-a1D4VfX_Lz6crgAx7lrW5AdvbdMqxl6Eye3u_iCLCeNViKdz5dJvfeFBGY7Xo1vpky-YeQ8pJlWp9cHdbZzXYomuNm6PdW6Gptkn-R1JYf27sWTquykPO1L_Er1ftHIW10zIvNZTDpHlUx8fsChiyHb-Xu5oO_91qMuqQ4FTuxdd2iWLP6tQe75_DFaWHJFCwhf1J-r7y_9tlEpJ8O8d5IiUpbbAbEALkhTqkVxSvqyR1XR2"/>
+</div>
+<h4 class="text-sm font-semibold text-zinc-100 truncate">The Godfather</h4>
+<div class="flex items-center text-xs text-zinc-500 mt-1">
+<i class="fas fa-star text-orange-500 mr-1 text-[10px]"></i>
+<span>5.0</span>
+</div>
+</div>
+<div class="group cursor-pointer">
+<div class="relative aspect-[2/3] rounded-2xl overflow-hidden mb-3">
+<img alt="Spirited Away" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDapdq10LFD8wUvw8TvqeQl9JDI06MrGfPqB2rEXfVosiqvln9WEvipYURVGPeHh2Bs4XALJro5oGKW-1oFNTgaazMHvbhRkxmGcU-WxXi96d3s7yjT4D14UG4912oXXgjgpzQOQbjBj6omXurptxjQDT9n3LfU8MwZL1DZ8fmic-zbCMu-o_rha_dQ7Z_DNlA6jUageFgpH41zdQFMbNZ3ohRQKHLvdCa5S_8hDUviDEUFx5Il3VWa6fPKw9z43WxwE2ErMvvz5K9f"/>
+</div>
+<h4 class="text-sm font-semibold text-zinc-100 truncate">Spirited Away</h4>
+<div class="flex items-center text-xs text-zinc-500 mt-1">
+<i class="fas fa-star text-orange-500 mr-1 text-[10px]"></i>
+<span>4.9</span>
+</div>
+</div>
+<div class="group cursor-pointer">
+<div class="relative aspect-[2/3] rounded-2xl overflow-hidden mb-3">
+<img alt="Last Night" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDofUaSug5fchlpJCvg3ZdHQdF1Zb90SbhiNHxZ0wHi3NazALMBlLwL6efHIzIzogJiO62aodokCbds1424k0JjKWx7eQ_CBA6uZkaDTh6k_YjDQMH746b-gPhZoAZVXCRiFzD8aZAh-RYMRKQslXvF94RXhsirvs0uNxaZVrci9QgiVHUW5O5vFR5wX0IAw4QVo100Da-IIIgsIKWGFqI8qgEtLCfMXM1V0vSU4lY-EipBxMqEvXdkusjFe0yj4vLMM8ECMP79xLo-"/>
+</div>
+<h4 class="text-sm font-semibold text-zinc-100 truncate">Last Night In Soho</h4>
+<div class="flex items-center text-xs text-zinc-500 mt-1">
+<i class="fas fa-star text-orange-500 mr-1 text-[10px]"></i>
+<span>4.8</span>
+</div>
+</div>
+<div class="group cursor-pointer">
+<div class="relative aspect-[2/3] rounded-2xl overflow-hidden mb-3">
+<img alt="Food Movie" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBwNwryky3d__HVxF_WWObVHZznEaG4_gOLaL6GB4evuxi9Q-inlY31KuIs5svYAOOwoopwNImd1dAit3REg11NVCMlMAxHw8XkSjYZPEF0uERGDjcHMAFpiLlzAcwDYzh_vMZscJM0n9fwOxkkOGQrsMN7zNwZrEjzd8BckNbVEooc1VyXO2nsLc_7eAs4kL0WQunI_JBuLwNEjwRZtGCs_e1-fEOqa-2HytI5F8DexzsrYV7gFLeg0yfd8YQ-hlzNd2QHv4iQoQdZ"/>
+</div>
+<h4 class="text-sm font-semibold text-zinc-100 truncate">Poor Things</h4>
+<div class="flex items-center text-xs text-zinc-500 mt-1">
+<i class="fas fa-star text-orange-500 mr-1 text-[10px]"></i>
+<span>4.8</span>
+</div>
+</div>
+</div>
+</section>
+<!-- END: Recommended Section -->
+<!-- BEGIN: Trending Actors Section -->
+<section data-purpose="trending-actors">
+<h3 class="text-xl font-bold mb-6">Trending Actors &amp; Actresses</h3>
+<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+<div class="flex items-center space-x-4 bg-zinc-800/40 p-4 rounded-2xl border border-white/5 hover:bg-zinc-800/60 transition-all cursor-pointer">
+<div class="actor-ring">
+<img alt="Actor" class="w-12 h-12 rounded-full border-2 border-[#121212]" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBAF5RNdkeV4fh35BN9yMdAWlLQT2wBub_JYUwVupr7NcCycZl8AvJ6IeBD8GlBBKDgQ1yPBC5u3PeKVa6G761TtbFqcFzZy4vFoygTHqrdGepeuwXU2nTle873NLDmjw-iB-7DVFfOPLTOC0iVCAa5SoEzc6LFUqTeBUpzIUbUeauDIw712ow1Jn8HkG93Xrx1D6AmzxqJmXBwAIS8NPJ1pE3860p41DAlSlKoH4tVtfSytZ_mVYSEeSnUo6Q3gFM0R1CWVT8gwB0C"/>
+</div>
+<div>
+<h4 class="text-sm font-bold text-white">Timothée Chalamet</h4>
+<p class="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold mt-0.5">Recent: Dune: Part Two</p>
+</div>
+</div>
+<div class="flex items-center space-x-4 bg-zinc-800/40 p-4 rounded-2xl border border-white/5 hover:bg-zinc-800/60 transition-all cursor-pointer">
+<div class="actor-ring">
+<img alt="Actor" class="w-12 h-12 rounded-full border-2 border-[#121212]" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDrZLTR-GsnZRxuV3RrOtVSTRfC-H2EARfaOXybtYbqjWHKlNokuQ8GCbIbslh5RoIcfyPYf5soRJcVRKt8gy8zhkWEjwC1FZMEwzE0YOG0rh1j0V9ZmXdmWugfYbMcmNm1Ho5HmwlYKXTG8aILRY7n4j4Rhkem7GM5d2XPxgoRpDcwWHKC0HDhfwtDoGmfx5Sa3f25doWbZTks4FQ6c9j0W3NuTOdHMOttCpk-5jTWjMeMAmbLWUghXju4aoMieQKKavln8uVVfEh3"/>
+</div>
+<div>
+<h4 class="text-sm font-bold text-white">Florence Pugh</h4>
+<p class="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold mt-0.5">Recent: Oppenheimer</p>
+</div>
+</div>
+<div class="flex items-center space-x-4 bg-zinc-800/40 p-4 rounded-2xl border border-white/5 hover:bg-zinc-800/60 transition-all cursor-pointer">
+<div class="actor-ring">
+<img alt="Actor" class="w-12 h-12 rounded-full border-2 border-[#121212]" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBn0_Z2XQUQKuSNSDNkM-RSmSJasy1i3w65pueeEt_T9IXJJFYLJadGrSA-gPvfQSPFbfw-_eoBoFehA7a3VXYWA7CxLM2rsIeDQNvloPR9twEEYY2vCDXXMg0XohWP1qdq53Wsipo13rqQWEfGmr0yLu7CXv4WEh_glKFF-yb1mEuoGkW-QJw1jhRaZBtF668-4ax595Y2eXLmE7UZoQWuCC-V-xugFwLvnh9xyQ0QQAWKbvWMCytORuW_Q1bQXfMtbl9JrJGc2h9c"/>
+</div>
+<div>
+<h4 class="text-sm font-bold text-white">Zendaya</h4>
+<p class="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold mt-0.5">Recent: Challengers</p>
+</div>
+</div>
+<div class="flex items-center space-x-4 bg-zinc-800/40 p-4 rounded-2xl border border-white/5 hover:bg-zinc-800/60 transition-all cursor-pointer">
+<div class="actor-ring">
+<img alt="Actor" class="w-12 h-12 rounded-full border-2 border-[#121212]" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDm6AvDSL2XMHikGgbzg_7xeKkcGSvKaH3XCeV8SHrmRHlCgBkiyJ70eIPV7yWP37MSMJmCtodLNdeh_lUGtiSwJ-wpUEnTcTfRxB4xWHmH3pg2v9tzHg7i8ymp38PTI2DVX8_Ii8LUqaaYpPmcbecXdvdpKP04Aqx5QhFyP91srZYT_GD0NodA4lhflfUUNWDxE62qKPj09epF1zqKan3RcyS9uhcTgQ0RKJGgXhDUJuoodK2j1ESogi5PUwvG3QMwHy3P82wC6LeO"/>
+</div>
+<div>
+<h4 class="text-sm font-bold text-white">Robert Downey Jr.</h4>
+<p class="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold mt-0.5">Recent: The Sympathizer</p>
+</div>
+</div>
+</div>
+</section>
+<!-- END: Trending Actors Section -->
+</div>
+<!-- Right Sidebar (Panel) -->
+<aside class="w-full lg:w-80 space-y-8" data-purpose="right-panel">
+<!-- BEGIN: Top Rated Panel -->
+<section class="bg-[#1a1a1a] p-6 rounded-3xl border border-white/5" data-purpose="top-rated">
+<h3 class="text-lg font-bold mb-6">Top Rated by Your Demographic</h3>
+<div class="space-y-5">
+<div class="flex items-center space-x-4">
+<img alt="Movie" class="w-12 h-18 rounded-lg object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBjbuEEQJXT31pMC-heBPIgq86UCbyFE8IUgT0vI8TYn0zBXfty05gyjIrfU-bVFmRXG4Q0ohIw3nf73TsfB9R66rCTi9Yi9QjC0_eqgn4ANfUZsRqw363KW4T1_4bdEZk6WPZkjK1eFXgR_Y_m3sTqFRQ_KdM-1hx3IMDWnE-V4-Y2RYzrrzda-pUwaKn53pGlNkKIVZqwaar_xbghhPgFkmTclcnv7yLF8svZqqj390IfmUzcOiC5VT41YYWPjnZ3b142UjtKsiN1"/>
+<div>
+<h4 class="text-sm font-bold text-zinc-100">Oppenheimer</h4>
+<div class="flex items-center text-xs text-zinc-500 mt-1">
+<i class="fas fa-star text-orange-500 mr-1 text-[10px]"></i>
+<span>4.5</span>
+</div>
+</div>
+</div>
+<div class="flex items-center space-x-4">
+<img alt="Movie" class="w-12 h-18 rounded-lg object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBNq-Ln4UOMlH6B2L_MZeVcqqk3GMxgIhEsbQBe2k5KxuuqkpspsQ-8rE9lV3BjqQQEhHm7CitDH8OI8AtZ239TGtf3bgeqQfNHD-v7AVJMABwjfK_FITGaV7iqdCqY_CYu8NNjFtwRqlA1Oaax4FgoSiip7PtiKSJ4YUC924YIx2bFFWox1UKK51RzauIZJD-wdZnEGlbAQgoV8_I54GtvoXVSwPaapxOl8fuRBfSkxSMQ_BkoC6pG3CJHb-heFC5qbUv4AoLGKZUr"/>
+<div>
+<h4 class="text-sm font-bold text-zinc-100">Barbie</h4>
+<div class="flex items-center text-xs text-zinc-500 mt-1">
+<i class="fas fa-star text-orange-500 mr-1 text-[10px]"></i>
+<span>5.0</span>
+</div>
+</div>
+</div>
+<div class="flex items-center space-x-4">
+<img alt="Movie" class="w-12 h-18 rounded-lg object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCLsBgRXVpESjoQh7dNTVmrULQ5LXw65MJT9yXumebea8JdieSE73oW0tw4at-F7QZKaj4iDqbgfseUGrnO5RPCa6YW9bIBBLNyjB5FYqFAqkpkUzeruCfsrL839F4FLseE-taMbTf61MVy-xJ7ifAWXuNugOZvb6AcQ7i6SVYTrm6Wcx27IDuBFZjtb3WrT1MOij_gk2YS8EqsEkoSW_4jQzkEecrwZnqn1uNcZmkgu72bp0Ooiakd-41DcD2jD1cswm9AsxrgW_8M"/>
+<div>
+<h4 class="text-sm font-bold text-zinc-100">Spider-Man: Across the Spider-Verse</h4>
+<div class="flex items-center text-xs text-zinc-500 mt-1">
+<i class="fas fa-star text-orange-500 mr-1 text-[10px]"></i>
+<span>4.9</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- END: Top Rated Panel -->
+<!-- BEGIN: Latest Discussions Panel -->
+<section class="bg-[#1a1a1a] p-6 rounded-3xl border border-white/5" data-purpose="latest-discussions">
+<h3 class="text-lg font-bold mb-6">Latest Discussions</h3>
+<div class="space-y-6">
+<div class="space-y-3">
+<div class="flex items-center space-x-3">
+<img alt="Avatar" class="w-7 h-7 rounded-full border border-white/10" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD1Ghnyn4AUVLBLrfCJKUL_nwzrDAK8BK0uDNaGTA-t_RF0a1DkceWoIYsqe3A2RIZBn2OmB0qy7vi1lS13KNtu_FWvpx9R3DYGLhKchdyog1Rvzz2lq9CjquGSuOe-VgzSIU23Yl0JqGmd1zAILbB8EvoSQC9Z4ufrJKTE0V5YiLoEiNyacLpKw6kYpfqQfu0bhpejkKYvsgsV-TYzrKoB6QDs2VMAibjVN30z-xBPCl-D5qGzUBmOlZxASMXItn2rrVrQVPhSAQr-"/>
+<p class="text-sm font-medium text-zinc-100 leading-tight">Has anyone seen the new A24 horror film?</p>
+</div>
+<div class="flex items-center space-x-2 pl-10 text-[11px] text-zinc-500">
+<img alt="Mini Avatar" class="w-4 h-4 rounded-full" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA5CTvf1KN4Z13oQA-xCgag9d_6L3j6Xw2KXfbmz1minDkd3z8LSr5U5PnxHU1FoDL7XzdNHhGDlFYPPhV38N74GIkVxRk1IBXMtEgQiHInRfVKdxoIMq42o5zMGHqcEQvWFkspyrhpxz8_bMg_5zZ86t9a423-9gbK2M9iwpcwKP7wqTvWdBTqR6R_9nvkpIHP-ZxQwwVJKmR-0-2Jt9bYa1EVBcNsFh3Y2ZEWabdFwc5br3egVJklBMYT7Wfj_Y0DQX0fr1Uickpr"/>
+<span>3 hours ago</span>
+</div>
+</div>
+<div class="space-y-3">
+<div class="flex items-center space-x-3">
+<img alt="Avatar" class="w-7 h-7 rounded-full border border-white/10" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBzyiOnVkfDkpYcB_gtYHzzsRIuGiR5rykasC0Qcznnm6cABsQQZYkM3TI8hSVwYSzE6s9xF-67bHSPLO11gZ8Wdi1cX9D7SMUkr0TrLmjg1MtY6JnE2j2EicTIhTBJ_WpzOJVESj0KoxAqbtgNLzTjzPpCnEtwu05d1h7JwzHS_OOhnigrYXtXgAQemh4_NllHes8uEP2huKOSkdqehxhi_citJGXbCkWp6e8a1hktb2hEAKW1h7NqpL2cmaCdRAHSTmPLcd2vi2hf"/>
+<p class="text-sm font-medium text-zinc-100 leading-tight">Best cinematography of the decade so far?</p>
+</div>
+<div class="flex items-center space-x-2 pl-10 text-[11px] text-zinc-500">
+<img alt="Mini Avatar" class="w-4 h-4 rounded-full" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBj60r6aa5doXUoezhbMdvLqytfx0Qu-oT_5EdItZKUrnHqn_LHkLeVbaWdBuWv7NVanx21WsYGw4oTX9GVNGBurAI9F6RVV4K6-gZ5pXS8oMuv52ncv_NSyPfUAGtmclh9ieetuiAgSeH9SMQQ7SP9lIgvv-GJCOuv3bZEKV2sjd_JVYgvFPiU4tyHwhoXoS05UNZkhxAmPm60BCzRtGwfoZafd5hqyhJXgoRGt67Zg1TR1ba-9FY0bpYWhDd9dPonfZiC9_WSuqN0"/>
+<span>3 hours ago</span>
+</div>
+</div>
+<div class="space-y-3">
+<div class="flex items-center space-x-3">
+<img alt="Avatar" class="w-7 h-7 rounded-full border border-white/10" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCfLCqeVdDQ7Q-cgpl-Lqkwwl0Bp_RbnYdEmeNjx7v6GRpFTp3IEBt5hv1xYVitZN0OvdP_ARWe1aoiOjTmy3b3HqsxlofqSSsc28MR1Zs5tgewP4rT6zsa1zEEBN8-nWXIXwpIoUrjQThNfR_NyT7bA1CmV1eVnTKF2ImVZEqJAg6N1E4KtRK7ldgBa1nFNQxHLvSV9Dc1Cetayh3SGwT4m1nIYAaj0oeAe07Y4CLvCQaOHu9cl_ZdtBKI4QROKr8B4ZbpL4WBoIPq"/>
+<p class="text-sm font-medium text-zinc-100 leading-tight">The ending of "The Zone of Interest"</p>
+</div>
+<div class="flex items-center space-x-2 pl-10 text-[11px] text-zinc-500">
+<img alt="Mini Avatar" class="w-4 h-4 rounded-full" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAJd_9B7qixBcS02FHMTFkGToc8RTj6enGHzarGKOvEECoXWhXe-4nJBMcJEGIPy9SSCiKeswVeO5-aVJVerlZ6-ZfOSxUDK3nMdMzcCmj7UCDzP7Ebu4qpZMdxSk1jby6xlYVptSN6TP57R78GvIJmA_fwHycqvcmIXG1yr1MjopUuf5sFolvJXCdAprvS9_l07hjChrm427pv9n3tidyxfNFW6zTf5Fay3IpXoOuzqogDctZyoXPI2RNmG6W33B7QW1jVBG2uTMNj"/>
+<span>3 hours ago</span>
+</div>
+</div>
+</div>
+</section>
+<!-- END: Latest Discussions Panel -->
+</aside>
+</div>
+</main>
+</div>
+</body></html>
