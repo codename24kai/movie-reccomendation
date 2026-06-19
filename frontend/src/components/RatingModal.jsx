@@ -1,5 +1,6 @@
 import { useContext, useState } from 'react';
 import { AuthContext } from '../context/authContext';
+import { API_BASE_URL } from '../config/api';
 
 const RatingModal = ({ isOpen, onClose, movieId, movieTitle }) => {
   const [rating, setRating] = useState(0);
@@ -13,7 +14,7 @@ const RatingModal = ({ isOpen, onClose, movieId, movieTitle }) => {
     if (rating === 0) return;
     setStatus('loading');
     try {
-      const response = await fetch('http://127.0.0.1:5000/rate', {
+      const response = await fetch(`${API_BASE_URL}/rate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -1,3 +1,67 @@
+# 🎬 MovieHub
+
+## Project Overview
+
+MovieHub adalah platform forum dan sistem rekomendasi film berbasis web yang dirancang untuk membantu pengguna menemukan, mendiskusikan, dan mengeksplorasi berbagai film dari berbagai genre dan periode waktu. Platform ini menggabungkan pengalaman komunitas dengan teknologi rekomendasi berbasis Machine Learning untuk memberikan pengalaman yang lebih personal dan interaktif.
+
+Pengguna dapat membuat akun, mengelola daftar film yang ingin ditonton (Watchlist), menandai film yang telah ditonton (Watched List), memberikan rating dan ulasan, serta berpartisipasi dalam diskusi bersama pengguna lain. Selain itu, MovieHub menyediakan berbagai informasi film seperti poster, trailer, sinopsis, genre, tahun rilis, rating, popularitas, tagline, hingga tautan IMDb untuk membantu pengguna mengenal film secara lebih mendalam.
+
+Untuk meningkatkan pengalaman pengguna, MovieHub dilengkapi dengan sistem rekomendasi film hibrida yang menggabungkan algoritma Matrix Factorization dan Random Forest. Pendekatan ini memungkinkan sistem menghasilkan rekomendasi yang lebih relevan berdasarkan preferensi pribadi pengguna, riwayat aktivitas, serta pola perilaku pengguna lain yang memiliki minat serupa.
+
+MovieHub dibangun menggunakan arsitektur modern yang memisahkan frontend, backend, dan komponen Machine Learning. Frontend dikembangkan menggunakan React.js untuk menghadirkan antarmuka yang responsif dan interaktif, sedangkan backend menggunakan Flask sebagai REST API yang mengelola autentikasi, pengolahan data, dan komunikasi dengan sistem rekomendasi. Komponen Machine Learning bertanggung jawab dalam melakukan proses pelatihan model dan menghasilkan rekomendasi film yang dipersonalisasi.
+
+Sumber data utama MovieHub berasal dari dataset MovieLens yang tersedia melalui Kaggle, yang kemudian diperkaya menggunakan The Movie Database (TMDB) API untuk memperoleh informasi film terkini seperti poster, trailer, backdrop, rating, dan metadata lainnya. Integrasi ini memungkinkan MovieHub menghadirkan kombinasi antara data historis yang kaya dan informasi film terbaru secara real-time.
+
+---
+
+## Key Features
+
+* **Personalized Movie Recommendations** menggunakan Hybrid Recommendation System.
+* **Watchlist Management** untuk menyimpan film yang ingin ditonton.
+* **Watched List Tracking** untuk mencatat riwayat tontonan pengguna.
+* **Rating and Review System** untuk memberikan penilaian dan ulasan terhadap film.
+* **Community Discussion Forum** untuk berdiskusi dan berbagi opini mengenai film.
+* **Trailer Integration** melalui TMDB dan YouTube.
+* **Detailed Movie Information** mencakup genre, sinopsis, rating, runtime, tagline, dan popularitas.
+* **Trending, Top Rated, Latest Release, dan Now Playing Movies**.
+* **Responsive User Interface** yang mendukung berbagai ukuran perangkat.
+* **User Authentication** dan Profile Management.
+
+---
+
+## Technology Stack
+
+### Frontend
+* React.js
+* Tailwind CSS
+* Font Awesome
+
+### Backend
+* Flask
+* REST API
+
+### Database
+* MongoDB Atlas
+
+### Machine Learning
+* Matrix Factorization (Collaborative Filtering)
+* Random Forest
+* Hybrid Recommendation Engine
+
+### External Services
+* TMDB API
+* IMDb
+* MovieLens Dataset (Kaggle)
+
+---
+
+## Project Goals
+
+MovieHub bertujuan untuk mengatasi kesulitan pengguna dalam menemukan film yang sesuai dengan preferensi mereka di tengah banyaknya pilihan yang tersedia saat ini. Dengan menggabungkan sistem rekomendasi berbasis kecerdasan buatan dan fitur komunitas yang interaktif, MovieHub berupaya menjadi platform yang tidak hanya membantu pengguna menemukan film yang tepat, tetapi juga menjadi ruang diskusi dan berbagi pengalaman bagi para pecinta film.
+
+---
+---
+
 # Panduan Arsitektur & Pencegahan Error — MovieHub
 
 > Dokumen ini merangkum arsitektur sistem MovieHub dan checklist pencegahan
@@ -258,3 +322,18 @@ urutan ini (urutan paling efisien berdasarkan pengalaman debugging project ini):
 
 *Dokumen ini dibuat berdasarkan sesi debugging project MovieHub —
 update sesuai perkembangan arsitektur project.*
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

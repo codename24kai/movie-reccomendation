@@ -7,7 +7,7 @@ from pymongo import MongoClient
 MONGO_URI = "mongodb+srv://kai-nabhan12:V5UC2KtF3DGBLQsi@movies-database.l7ywj4w.mongodb.net/?retryWrites=true&w=majority&appName=movies-database"
 
 # 2. Masukkan TMDB API Key kamu di sini
-TMDB_API_KEY = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJiNGJkMDdkMWNmOTI1YzI0YjBlNGUwZTc3NzNlZDk0NCIsIm5iZiI6MTc4MTMzNjM4Ni4zNzksInN1YiI6IjZhMmQwOTQyNzlkYjY0YWViZDk1NTAzZCIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.JTNCGxHFB2e1Z-7uJEFFBrTPSCavor8cHvzHcBA0z8w"
+TMDB_API_KEY = "V5UC2KtF3DGBLQsi"
 
 # Hubungkan ke database
 client = MongoClient(MONGO_URI)

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import RatingModal from './RatingModal';
+import { API_BASE_URL } from '../config/api';
 
 const POOL_SIZE = 20;
 const AUTO_ROTATE_MS = 8000;
@@ -14,7 +15,7 @@ const HeroCarousel = ({ userId }) => {
   useEffect(() => {
     const fetchMovies = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:5000/movies');
+        const response = await fetch(`${API_BASE_URL}/movies`);
         const data = await response.json();
 
         if (data.status === 'ok' && data.movies?.length > 0) {

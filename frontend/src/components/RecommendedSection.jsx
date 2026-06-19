@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import MovieCard from './MovieCard';
+import { API_BASE_URL } from '../config/api';
 
 const RecommendedSection = ({ userId }) => {
   const [movies, setMovies] = useState([]);
@@ -10,7 +11,7 @@ const RecommendedSection = ({ userId }) => {
     const fetchRecommendations = async () => {
       try {
         setLoading(true);
-        const response = await fetch('http://127.0.0.1:5000/recommend', {
+        const response = await fetch(`${API_BASE_URL}/recommend`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

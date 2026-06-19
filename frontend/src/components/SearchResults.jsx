@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import MovieCard from './MovieCard';
+import { API_BASE_URL } from '../config/api';
 
 const SearchResults = ({ query }) => {
   const [results, setResults] = useState([]);
@@ -9,11 +10,11 @@ const SearchResults = ({ query }) => {
     const fetchSearch = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`http://127.0.0.1:5000/movies/search?q=${query}`);
+        const response = await fetch(`${API_BASE_URL}/movies/search?q=${encodeURIComponent(query)}`);
         const data = await response.json();
         
         if (data.status === 'ok') {
-          setResults(data.data);
+          setResults(data.results || []);
         }
       } catch (err) {
         console.error("Gagal mencari film:", err);

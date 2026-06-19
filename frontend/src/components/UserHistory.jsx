@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config/api';
 
 const STARS = [1, 2, 3, 4, 5];
 
@@ -7,12 +8,11 @@ const StarDisplay = ({ rating }) => (
     {STARS.map((s) => (
       <i
         key={s}
-        className={`fas fa-star text-[11px] ${
-          s <= Math.round(rating) ? 'text-amber-400' : 'text-white/10'
-        }`}
+        className={`fas fa-star text-[11px] ${s <= Math.round(rating) ? 'text-amber-400' : 'text-white/10'
+          }`}
       />
     ))}
-    <span className="ml-1.5 text-xs font-bold text-amber-400">{Number(rating).toFixed(1)}</span>
+    <span className="ml-1.5 text-xs font-bold text-amber-400">{Number(rating || 0).toFixed(1)}</span>
   </div>
 );
 
@@ -28,14 +28,24 @@ const UserHistory = ({ userId }) => {
       setLoading(true);
       setError('');
       try {
-        const response = await fetch(`http://127.0.0.1:5000/user/${userId}/history`);
+        // Endpoint sesuai permintaanmu
+        const response = await fetch(`${API_BASE_URL}/user/${userId}/history`);
         const data = await response.json();
+
         if (data.status === 'ok') {
-          setHistory(data.ratings ?? []);
+          // Normalisasi: Pastikan data yang diterima di-map agar konsisten
+          const normalized = (data.ratings || []).map(item => ({
+            movieId: item.movie_id ?? item.movieId,
+            title: item.title ?? 'Unknown Title',
+            genres: item.genres ?? '',
+            rating: item.rating ?? 0
+          }));
+          setHistory(normalized);
         } else {
-          setError('Gagal memuat riwayat rating.');
+          setError(data.message || 'Gagal memuat riwayat rating.');
         }
-      } catch {
+      } catch (err) {
+        console.error("Fetch Error:", err);
         setError('Tidak dapat terhubung ke server.');
       } finally {
         setLoading(false);

@@ -1,0 +1,42 @@
+# ── Python ────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+venv/
+.venv/
+env/
+
+# ── Environment / Secrets ──────────────────────────────
+.env
+.env.local
+.env.production
+!.env.example
+!.env.production.example
+
+# ── Model & Data files (besar, tidak perlu di Git) ────
+models/*.pkl
+cleaned_data/*.csv
+
+# ── Frontend ───────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+frontend/.env.production
+!frontend/.env.production.example
+
+# ── Editor / OS ────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ── Logs ───────────────────────────────────────────────
+*.log
+logs/

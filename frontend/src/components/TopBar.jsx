@@ -1,92 +1,123 @@
-import { useState, useContext, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect, useContext, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
+import { ChatContext } from '../context/ChatContext';
+import { API_BASE_URL } from '../config/api';
+import InboxDropdown from './InboxDropdown';
+import NotificationsDropdown from './NotificationsDropdown';
 
-const TopBar = ({ onSearch }) => {
+const PAGE_LABELS = {
+  '/home': { label: 'Beranda', icon: 'fa-house' },
+  '/catalog': { label: 'Katalog Film', icon: 'fa-compass' },
+  '/community': { label: 'Komunitas', icon: 'fa-users' },
+  '/watchlist': { label: 'Watchlist', icon: 'fa-bookmark' },
+  '/profile': { label: 'Profil Saya', icon: 'fa-user' },
+};
+
+const getInitials = (name) => {
+  if (!name) return 'U';
+  const words = name.trim().split(/\s+/);
+  if (words.length >= 2) {
+    return (words[0][0] + words[1][0]).toUpperCase();
+  }
+  return words[0].substring(0, 2).toUpperCase();
+};
+
+const TopBar = () => {
+  const location = useLocation();
   const { user } = useContext(AuthContext);
-  const [inputValue, setInputValue] = useState('');
-  const inputRef = useRef(null);
+  // Konsumsi notification count dari ChatContext (realtime via SocketIO)
+  const { unreadNotifCount, setUnreadNotifCount } = useContext(ChatContext);
+  const [now, setNow] = useState(new Date());
 
-  const displayName = user?.name ?? user?.username ?? 'Pengguna';
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && inputValue.trim()) {
-      onSearch(inputValue.trim());
+  const activeUser = useMemo(() => {
+    if (user) return user;
+    try {
+      const stored = localStorage.getItem('user');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
     }
-    if (e.key === 'Escape') {
-      setInputValue('');
-      inputRef.current?.blur();
-    }
-  };
+  }, [user]);
 
-  const handleClear = () => {
-    setInputValue('');
-    onSearch('');
-    inputRef.current?.focus();
-  };
+  const userId = activeUser?.user_id ?? activeUser?.id;
+
+  const { displayName, profilePicture, initials } = useMemo(() => {
+    const name = activeUser?.name ?? activeUser?.username ?? 'Pengguna';
+    const pic = activeUser?.profile_picture || null;
+    return {
+      displayName: name,
+      profilePicture: pic,
+      initials: getInitials(name)
+    };
+  }, [activeUser]);
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Fetch awal unread count via REST saat mount, lalu update realtime via SocketIO di ChatContext
+  useEffect(() => {
+    if (!userId) return;
+    const fetchInitialCount = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/notifications/unread-count/${userId}`);
+        const data = await res.json();
+        if (data.status === 'ok') {
+          setUnreadNotifCount(data.unread_count || 0);
+        }
+      } catch (err) {
+        console.error('Gagal memuat unread notifications:', err);
+      }
+    };
+    fetchInitialCount();
+  }, [userId]);
+
+  const pageInfo = PAGE_LABELS[location.pathname] ?? { label: 'MovieHub', icon: 'fa-film' };
+
+  const formattedDate = now.toLocaleDateString('id-ID', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+  });
+
+  const formattedTime = now.toLocaleTimeString('id-ID', {
+    hour: '2-digit', minute: '2-digit'
+  });
 
   return (
-    <header className="h-16 flex items-center justify-between px-6 gap-4
-                       bg-[#080810] border-b border-white/[0.06] shrink-0">
-
-      {/* Search */}
-      <div className="relative w-80">
-        <i className="fas fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2
-                      text-white/25 text-sm pointer-events-none" />
-        <input
-          ref={inputRef}
-          type="text"
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Cari film, genre, sutradara..."
-          className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl
-                     pl-9 pr-8 py-2 text-sm text-white placeholder-white/25
-                     focus:outline-none focus:ring-2 focus:ring-indigo-500/50
-                     focus:border-indigo-500/30 transition-all"
-        />
-        {/* Clear button */}
-        {inputValue && (
-          <button
-            onClick={handleClear}
-            className="absolute right-3 top-1/2 -translate-y-1/2
-                       text-white/25 hover:text-white/60 transition-colors"
-            aria-label="Hapus pencarian"
-          >
-            <i className="fas fa-xmark text-sm" />
-          </button>
-        )}
+    <div className="h-20 border-b border-white/[0.05] flex items-center justify-between px-8 bg-[#0f0f0f]/90 backdrop-blur-md sticky top-0 z-50">
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+          <i className={`fas ${pageInfo.icon} text-xs`} />
+        </div>
+        <span className="text-sm font-bold text-white tracking-wide">{pageInfo.label}</span>
       </div>
 
-      {/* Right side */}
-      <div className="flex items-center gap-2">
-        {/* Shortcut hint */}
-        <span className="hidden lg:flex items-center gap-1 text-[11px] text-white/20 mr-2">
-          <kbd className="px-1.5 py-0.5 rounded bg-white/[0.07] border border-white/[0.08] font-mono">
-            Enter
-          </kbd>
-          untuk mencari
-        </span>
+      <div className="flex items-center gap-6">
+        <div className="hidden md:flex items-center gap-2 text-white/40 text-xs font-medium bg-white/[0.02] border border-white/[0.05] py-1.5 px-3 rounded-full">
+          <i className="far fa-clock text-[10px]" />
+          <span>{formattedDate}</span>
+          <span className="text-white/10">•</span>
+          <span className="text-white/80 font-bold">{formattedTime}</span>
+        </div>
 
-        {/* Profile link */}
-        <Link
-          to="/profile"
-          className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl
-                     hover:bg-white/[0.06] border border-transparent
-                     hover:border-white/[0.08] transition-all group"
-        >
-          <div className="w-7 h-7 rounded-full bg-indigo-500/25 flex items-center justify-center
-                          text-[11px] font-bold text-indigo-300 shrink-0">
-            {displayName.charAt(0).toUpperCase()}
-          </div>
-          <span className="text-sm font-medium text-white/60 group-hover:text-white
-                           transition-colors hidden sm:block">
-            {displayName}
-          </span>
-          <i className="fas fa-chevron-down text-[10px] text-white/25 hidden sm:block" />
-        </Link>
+        <div className="flex items-center gap-4">
+          <InboxDropdown />
+          <NotificationsDropdown
+            unreadCount={unreadNotifCount}
+            onNotificationsRead={() => setUnreadNotifCount(0)}
+          />
+        </div>
+
+        <div className="w-10 h-10 rounded-full overflow-hidden border border-white/10 cursor-pointer hover:border-indigo-400 transition-colors bg-indigo-600 flex items-center justify-center">
+          {profilePicture ? (
+            <img src={profilePicture} alt={displayName} className="w-full h-full object-cover" />
+          ) : (
+            <span className="text-[15px] font-black text-white tracking-wide">{initials}</span>
+          )}
+        </div>
       </div>
-    </header>
+    </div>
   );
 };
 

@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useGoogleLogin } from '@react-oauth/google';
+import { API_BASE_URL } from '../config/api';
 
 const Register = () => {
   const [username, setUsername] = useState('');
@@ -8,8 +10,40 @@ const Register = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const navigate = useNavigate();
+
+  const registerWithGoogle = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      setIsGoogleLoading(true);
+      setError('');
+      try {
+        const response = await fetch(`${API_BASE_URL}/auth/google`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ access_token: tokenResponse.access_token }),
+        });
+        const data = await response.json();
+
+        if (data.status === 'ok') {
+          localStorage.setItem('token', data.token);
+          localStorage.setItem('user', JSON.stringify(data.user));
+          navigate('/home');
+        } else {
+          setError(data.message || 'Gagal mendaftar dengan Google.');
+        }
+      } catch {
+        setError('Tidak dapat terhubung ke server. Periksa koneksimu.');
+      } finally {
+        setIsGoogleLoading(false);
+      }
+    },
+    onError: () => {
+      setError('Autentikasi Google dibatalkan atau gagal.');
+      setIsGoogleLoading(false);
+    },
+  });
 
   const handleRegister = async (e) => {
     e.preventDefault();
@@ -23,7 +57,7 @@ const Register = () => {
     }
 
     try {
-      const response = await fetch('http://127.0.0.1:5000/register', {
+      const response = await fetch(`${API_BASE_URL}/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, email, password }),
@@ -180,6 +214,20 @@ const Register = () => {
               )}
             </button>
           </form>
+
+          <button
+            type="button"
+            onClick={() => registerWithGoogle()}
+            disabled={isGoogleLoading}
+            className="mt-4 w-full flex items-center justify-center gap-3 rounded-xl border border-white/10 bg-white px-4 py-3 font-bold text-black transition-colors hover:bg-gray-200 disabled:opacity-60"
+          >
+            {isGoogleLoading ? (
+              <i className="fas fa-spinner fa-spin text-sm" />
+            ) : (
+              <img src="/assets/google.png" alt="Google" className="w-5 h-5" />
+            )}
+            Daftar dengan Google
+          </button>
 
           {/* Divider */}
           <div className="flex items-center gap-3 my-6">

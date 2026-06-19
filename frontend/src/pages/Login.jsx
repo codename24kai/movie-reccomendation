@@ -1,6 +1,8 @@
 import { useState, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
+import { useGoogleLogin } from '@react-oauth/google';
+import { API_BASE_URL } from '../config/api';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -12,13 +14,44 @@ const Login = () => {
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
 
+  const loginWithGoogle = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/auth/google`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ access_token: tokenResponse.access_token }),
+        });
+        const data = await res.json();
+
+        if (data.status === 'ok') {
+          localStorage.setItem('token', data.token);
+          localStorage.setItem('user', JSON.stringify(data.user));
+          if (login) login(data.user, data.token);
+
+          // FIX: pakai navigate (SPA) agar konsisten dengan handleLogin,
+          // hindari full page reload yang membuang state aplikasi.
+          navigate('/home');
+        } else {
+          setError(data.message);
+        }
+      } catch (err) {
+        console.error('Google Auth Error:', err);
+        setError('Gagal terhubung ke Google. Coba lagi nanti.');
+      }
+    },
+    onError: () => {
+      setError('Autentikasi Google dibatalkan atau gagal.');
+    },
+  });
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
 
     try {
-      const response = await fetch('http://127.0.0.1:5000/login', {
+      const response = await fetch(`${API_BASE_URL}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -44,7 +77,6 @@ const Login = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#080810] text-white px-4">
-      {/* Background subtle glow */}
       <div
         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
                    w-[500px] h-[500px] rounded-full pointer-events-none -z-10"
@@ -52,7 +84,6 @@ const Login = () => {
       />
 
       <div className="w-full max-w-md">
-        {/* Card */}
         <div className="bg-white/[0.03] border border-white/[0.08] rounded-2xl p-8
                         shadow-2xl shadow-black/40">
 
@@ -82,7 +113,6 @@ const Login = () => {
 
           {/* Form */}
           <form onSubmit={handleLogin} className="space-y-5">
-            {/* Email */}
             <div>
               <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">
                 Email
@@ -101,13 +131,11 @@ const Login = () => {
               />
             </div>
 
-            {/* Password */}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider">
                   Password
                 </label>
-                {/* Placeholder — hubungkan ke halaman forgot password jika tersedia */}
                 <span className="text-xs text-indigo-400 hover:text-indigo-300 cursor-pointer transition-colors">
                   Lupa password?
                 </span>
@@ -137,7 +165,6 @@ const Login = () => {
               </div>
             </div>
 
-            {/* Submit */}
             <button
               type="submit"
               disabled={isLoading}
@@ -161,12 +188,22 @@ const Login = () => {
           {/* Divider */}
           <div className="flex items-center gap-3 my-6">
             <div className="flex-1 h-px bg-white/[0.07]" />
-            <span className="text-xs text-white/25">atau</span>
+            <span className="text-xs text-white/25">ATAU</span>
             <div className="flex-1 h-px bg-white/[0.07]" />
           </div>
 
+          {/* Google Login Button */}
+          <button
+            type="button"
+            onClick={() => loginWithGoogle()}
+            className="w-full flex items-center justify-center gap-3 bg-white text-black py-3 rounded-xl font-bold hover:bg-gray-200 transition-colors"
+          >
+            <img src="/assets/google.png" alt="Google" className="w-5 h-5" />
+            Lanjutkan dengan Google
+          </button>
+
           {/* Register link */}
-          <p className="text-center text-sm text-white/40">
+          <p className="text-center text-sm text-white/40 mt-6">
             Belum punya akun?{' '}
             <Link to="/register" className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">
               Daftar gratis
@@ -174,7 +211,6 @@ const Login = () => {
           </p>
         </div>
 
-        {/* Back to home */}
         <p className="text-center mt-5">
           <Link to="/" className="text-xs text-white/25 hover:text-white/50 transition-colors flex items-center justify-center gap-1">
             <i className="fas fa-arrow-left text-[10px]" />
