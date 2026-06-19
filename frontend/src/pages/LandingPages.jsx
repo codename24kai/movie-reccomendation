@@ -325,8 +325,8 @@ const LandingPages = () => {
       <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-[#080810]/75 backdrop-blur-2xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 md:px-10">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-base shrink-0">
-              🎬
+            <div className="w-8 h-8 flex items-center justify-center text-base shrink-0">
+              <img src="/assets/logo.png" alt="Logo" className="w-full h-full object-contain" />
             </div>
             <div>
               <p className="text-xs uppercase tracking-[0.35em] text-indigo-300 leading-none">MovieHub</p>

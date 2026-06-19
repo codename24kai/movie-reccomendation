@@ -2103,6 +2103,7 @@ def handle_comments(post_id):
             comments_collection.insert_one(comment_doc)
 
             # 2. Update counter `comments_count` di collection posts/threads secara otomatis
+            # pyrefly: ignore [unknown-name]
             posts_collection.update_one(
                 {"$or": [{"post_id": post_id}, {"thread_id": post_id}]},
                 {"$inc": {"comments_count": 1}}

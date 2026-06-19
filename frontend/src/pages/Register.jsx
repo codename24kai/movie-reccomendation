@@ -95,9 +95,8 @@ const Register = () => {
           {/* Header */}
           <div className="text-center mb-8">
             <Link to="/" className="inline-flex items-center gap-2 mb-6">
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600
-                              flex items-center justify-center text-base">
-                🎬
+              <div className="w-9 h-9 flex items-center justify-center text-base">
+                <img src="/assets/logo.png" alt="Logo" className="w-full h-full object-contain" />
               </div>
               <span className="text-lg font-extrabold tracking-tight">MovieHub</span>
             </Link>
