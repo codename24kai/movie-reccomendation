@@ -16,8 +16,12 @@ const ChatDrawer = ({ isOpen, onClose, targetUser }) => {
   const activeUser = user || JSON.parse(localStorage.getItem('user') || '{}');
   const userId = activeUser?.user_id || activeUser?.id;
 
-  // PERBAIKAN: Gunakan sort alfabetis murni tanpa { numeric: true } agar sinkron 100% dengan Python
+  // PERBAIKAN 1: Ambil targetId dengan semua kemungkinan key, hindari undefined
+  const targetId = targetUser?.user_id || targetUser?.id || targetUser?._id;
+
+  // PERBAIKAN 2: Pastikan ID tidak kosong saat diurutkan
   const getConversationId = (uid1, uid2) => {
+    if (!uid1 || !uid2) return "";
     return [String(uid1), String(uid2)].sort().join('-');
   };
 
@@ -29,18 +33,17 @@ const ChatDrawer = ({ isOpen, onClose, targetUser }) => {
 
   // Initialize Socket Connection & Listeners
   useEffect(() => {
-    if (!isOpen || !userId || !targetUser) return;
+    if (!isOpen || !userId || !targetId) return;
 
     const newSocket = io(SOCKET_URL);
     setSocket(newSocket);
 
     newSocket.on('connect', () => {
-      newSocket.emit('join_chat', { user_id: userId, other_user_id: targetUser.user_id });
+      newSocket.emit('join_chat', { user_id: userId, other_user_id: targetId });
     });
 
     newSocket.on('receive_message', (msg) => {
-      const currentRoom = getConversationId(userId, targetUser.user_id);
-      // Sekarang perbandingan ID ini dijamin valid dan presisi
+      const currentRoom = getConversationId(userId, targetId);
       if (msg.conversation_id === currentRoom) {
         setMessages((prev) => [...prev, msg]);
         setTimeout(scrollToBottom, 50);
@@ -48,19 +51,19 @@ const ChatDrawer = ({ isOpen, onClose, targetUser }) => {
     });
 
     return () => {
-      newSocket.emit('leave_chat', { user_id: userId, other_user_id: targetUser.user_id });
+      newSocket.emit('leave_chat', { user_id: userId, other_user_id: targetId });
       newSocket.disconnect();
     };
-  }, [isOpen, userId, targetUser?.user_id]);
+  }, [isOpen, userId, targetId]);
 
   // Fetch Message History
   useEffect(() => {
-    if (!isOpen || !userId || !targetUser) return;
+    if (!isOpen || !userId || !targetId) return;
 
     const fetchHistory = async () => {
       setIsLoading(true);
       try {
-        const roomId = getConversationId(userId, targetUser.user_id);
+        const roomId = getConversationId(userId, targetId);
         const res = await fetch(`${API_BASE_URL}/chat/messages/${roomId}`);
         const data = await res.json();
         if (data.status === 'ok') {
@@ -75,15 +78,15 @@ const ChatDrawer = ({ isOpen, onClose, targetUser }) => {
     };
 
     fetchHistory();
-  }, [isOpen, userId, targetUser?.user_id]);
+  }, [isOpen, userId, targetId]);
 
   const sendMessage = (e) => {
     e.preventDefault();
-    if (!inputText.trim() || !socket || !targetUser) return;
+    if (!inputText.trim() || !socket || !targetId) return;
 
     socket.emit('send_message', {
       sender_id: userId,
-      receiver_id: targetUser.user_id,
+      receiver_id: targetId,
       text: inputText.trim()
     });
 
@@ -99,12 +102,12 @@ const ChatDrawer = ({ isOpen, onClose, targetUser }) => {
       <div className="flex items-center justify-between px-4 py-4 border-b border-white/10 bg-black/20">
         <div className="flex items-center gap-3">
           <img
-            src={targetUser.profile_picture || `https://ui-avatars.com/api/?name=${targetUser.username}&background=6366f1&color=fff`}
+            src={targetUser.profile_picture || `https://ui-avatars.com/api/?name=${targetUser.username || 'User'}&background=6366f1&color=fff`}
             alt={targetUser.username}
             className="w-10 h-10 rounded-full object-cover border border-indigo-500/30"
           />
           <div>
-            <h3 className="font-bold text-white text-sm">{targetUser.username}</h3>
+            <h3 className="font-bold text-white text-sm">{targetUser.username || 'Pengguna'}</h3>
             <span className="text-[10px] text-emerald-400 flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Online
             </span>

@@ -39,19 +39,16 @@ const InboxDropdown = () => {
     }
   }, [isOpen]);
 
-  // Listener Background pasif untuk update list obrolan jika ada pesan masuk secara realtime
   useEffect(() => {
     if (!userId) return;
 
     const globalChatSocket = io(SOCKET_URL);
 
     globalChatSocket.on('connect', () => {
-      // Memicu join ke kanal notifications untuk memantau pesan baru secara global
       globalChatSocket.emit('join_notifications', { user_id: userId });
     });
 
-    globalChatSocket.on('new_notification', (payload) => {
-      // Jika ada notifikasi pesan baru atau perubahan obrolan, perbarui list
+    globalChatSocket.on('new_notification', () => {
       fetchConversations();
     });
 
@@ -70,7 +67,6 @@ const InboxDropdown = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Hitung jumlah percakapan yang belum dibaca secara lokal
   const unreadChatsCount = conversations.filter(conv => String(conv.last_sender_id) !== String(userId)).length;
 
   return (
@@ -113,26 +109,24 @@ const InboxDropdown = () => {
               conversations.map((conv) => {
                 const isUnread = String(conv.last_sender_id) !== String(userId);
 
+                const targetObj = conv.other_user || {};
+
+                // PERBAIKAN: Jika targetObj tidak membawa ID dari backend, cari ID alternatif di array participants percakapan
+                const backupTargetId = conv.participants?.find(p => String(p) !== String(userId));
+                const targetId = targetObj.user_id || targetObj.id || targetObj._id || backupTargetId;
+
                 const handleConversationClick = async () => {
-                  if (!conv.other_user) return;
+                  if (!targetId) {
+                    console.error("Target ID tidak ditemukan pada percakapan ini:", conv);
+                    return;
+                  }
 
                   try {
-                    await fetch(`${API_BASE_URL}/chat/conversations/init`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        sender_id: userId,
-                        receiver_id: conv.other_user.user_id || conv.other_user.id
-                      })
-                    });
-
-                    // Buka drawer chat dengan data user yang bersih
                     openChatWithUser({
-                      user_id: conv.other_user.user_id || conv.other_user.id,
-                      username: conv.other_user.username,
-                      profile_picture: conv.other_user.profile_picture
+                      user_id: targetId,
+                      username: targetObj.username || 'Pengguna',
+                      profile_picture: targetObj.profile_picture
                     });
-
                     setIsOpen(false);
                   } catch (err) {
                     console.error("Gagal membuka percakapan:", err);
@@ -146,14 +140,14 @@ const InboxDropdown = () => {
                     className="px-4 py-3 border-b border-white/5 hover:bg-white/5 cursor-pointer flex gap-3 transition-colors"
                   >
                     <img
-                      src={conv.other_user?.profile_picture || `https://ui-avatars.com/api/?name=${conv.other_user?.username || 'U'}&background=6366f1&color=fff`}
-                      alt={conv.other_user?.username}
+                      src={targetObj.profile_picture || `https://ui-avatars.com/api/?name=${targetObj.username || 'U'}&background=6366f1&color=fff`}
+                      alt={targetObj.username}
                       className="w-10 h-10 rounded-full object-cover shrink-0"
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-baseline mb-0.5">
                         <h4 className={`text-sm truncate pr-2 ${isUnread ? 'font-bold text-white' : 'font-medium text-white/80'}`}>
-                          {conv.other_user?.username || 'Pengguna Lain'}
+                          {targetObj.username || 'Pengguna Lain'}
                         </h4>
                         <span className="text-[10px] text-white/40 shrink-0">
                           {conv.updated_at ? new Date(conv.updated_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : ''}

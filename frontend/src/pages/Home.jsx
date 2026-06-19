@@ -1,30 +1,38 @@
 import { useState, useEffect, useContext, useRef } from 'react';
 import { AuthContext } from '../context/AuthContext';
-import AmbientBanner from '../components/AmbientBanner';
+import FireflyBackground from '../components/Fireflybackground';
 import MovieCard from '../components/MovieCard';
 import MovieDetailModal from '../components/MovieDetailModal';
 import { API_BASE_URL } from '../config/api';
 
 // ── Normalisasi field ─────────────────────────────────────────────
-const normalizeMovie = (movie) => ({
-  ...movie,
-  movieId: movie.movie_id ?? movie.movieId ?? movie.tmdb_id,
-  title: movie.title ?? 'Judul tidak tersedia',
-  genres: movie.genres ?? '',
-  poster_url: movie.poster_url ?? movie.posterUrl ?? null,
-  overview: movie.overview ?? '',
-  vote_average: movie.vote_average ?? movie.avg_rating ?? null,
-  vote_count: movie.vote_count ?? movie.votes ?? null,
-  popularity: movie.popularity ?? 0,
-  release_year: movie.release_year ?? movie.year ?? null,
-  source: 'tmdb',
-  tmdb_id: movie.movie_id ?? movie.tmdb_id ?? null,
-});
+const normalizeMovie = (movie) => {
+  const rawId = movie.movie_id ?? movie.movieId ?? movie.tmdb_id ?? movie.id;
+  const cleanId = rawId ? String(rawId).trim() : null;
+
+  return {
+    ...movie,
+    movieId: cleanId,
+    movie_id: cleanId,
+    tmdb_id: cleanId,
+    title: movie.title ?? 'Judul tidak tersedia',
+    genres: movie.genres ?? '',
+    poster_url: movie.poster_url ?? movie.posterUrl ?? (movie.poster_path ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` : null),
+    overview: movie.overview ?? '',
+    vote_average: movie.vote_average ?? movie.avg_rating ?? null,
+    vote_count: movie.vote_count ?? movie.votes ?? null,
+    popularity: movie.popularity ?? 0,
+    release_year: movie.release_year ?? movie.year ?? null,
+    recommendation_source: movie._recommendation_source ?? movie.recommendation_source ?? movie.source ?? null,
+    _recommendation_source: movie._recommendation_source ?? movie.recommendation_source ?? movie.source ?? null,
+    source: 'tmdb'
+  };
+};
 
 const normalizeMovies = (movies = []) =>
   movies
     .map(normalizeMovie)
-    .filter((m) => m.poster_url && m.poster_url.trim() !== '');
+    .filter((m) => m.movieId && m.poster_url && m.poster_url.trim() !== '');
 
 const getWeightedScore = (movie) => {
   const rating = Number(movie.vote_average ?? movie.avg_rating ?? 0);
@@ -38,16 +46,16 @@ const getWeightedScore = (movie) => {
   return (ratingScore * 0.55) + (voteScore * 0.3) + (popularityScore * 0.15);
 };
 
+// PERBAIKAN 1: Penggabungan bucket yang kebal tipe data int vs string dan menjamin anti-duplikat
 const mergeRecommendationBuckets = (personal = [], fresh = [], limit = 6) => {
   const seen = new Set();
   const merged = [];
 
   const pushUnique = (movie, source) => {
-    // Pastikan ID diseragamkan jadi string
-    const rawId = movie.movieId ?? movie.movie_id ?? movie.tmdb_id;
-    const key = String(rawId);
+    if (!movie || !movie.movieId) return;
+    const key = String(movie.movieId || movie.movie_id || movie.tmdb_id).trim();
 
-    if (!key || seen.has(key)) return;
+    if (seen.has(key)) return;
     seen.add(key);
     merged.push({ ...movie, _recommendation_source: source });
   };
@@ -66,7 +74,7 @@ const fetchWithTimeout = (url, options = {}, timeoutMs = 8000) => {
     .finally(() => clearTimeout(timer));
 };
 
-// ── Section header dengan garis aksen kiri (dipakai semua MovieSection) ──
+// ── Section header dengan garis aksen kiri ───────────────────────
 const SectionHeading = ({ icon, iconColor, title, badge, extra }) => (
   <div className="flex items-center gap-3 mb-5">
     <span className={`h-5 w-1 rounded-full ${iconColor.replace('text-', 'bg-')}`} />
@@ -84,7 +92,7 @@ const SectionHeading = ({ icon, iconColor, title, badge, extra }) => (
 );
 
 // ── Section horizontal scroll ────────────────────────────────────
-const MovieSection = ({ icon, iconColor, title, badge, movies, onClickDetail }) => { // <--- Tambahkan onClickDetail di sini
+const MovieSection = ({ icon, iconColor, title, badge, movies, onClickDetail }) => {
   if (!movies?.length) return null;
   return (
     <section className="rounded-[1.75rem] border border-white/[0.05] bg-white/[0.015] p-5 md:p-6">
@@ -93,9 +101,9 @@ const MovieSection = ({ icon, iconColor, title, badge, movies, onClickDetail }) 
         <span className="text-[11px] text-white/25 font-medium shrink-0">{movies.length} film</span>
       </div>
       <div className="flex gap-4 overflow-x-auto pb-1 pt-3 scrollbar-hide snap-x">
-        {movies.map((movie) => (
+        {movies.map((movie, index) => (
           <div
-            key={`${movie.movieId}`}
+            key={`${movie.movieId || movie.movie_id}-${index}`}
             className="w-[130px] sm:w-[140px] md:w-[160px] snap-start shrink-0"
           >
             <MovieCard movie={movie} onClickDetail={onClickDetail} />
@@ -117,19 +125,7 @@ const CardSkeleton = () => (
   </div>
 );
 
-// ── Quick stat pill (dipakai di bawah hero) ───────────────────────
-const QuickStat = ({ icon, color, value, label }) => (
-  <div className="flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.03] px-4 py-3 flex-1 min-w-[140px]">
-    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${color}`}>
-      <i className={icon} />
-    </div>
-    <div>
-      <p className="text-lg font-black text-white leading-none">{value}</p>
-      <p className="text-[10px] text-white/35 mt-0.5">{label}</p>
-    </div>
-  </div>
-);
-
+// ── Quick stat pill ──────────────────────────────────────────────
 // ================================================================
 const Home = () => {
   const { user } = useContext(AuthContext);
@@ -143,8 +139,9 @@ const Home = () => {
     } catch { return null; }
   })();
 
-  const [featuredMovie, setFeaturedMovie] = useState(null);
   const [recommended, setRecommended] = useState([]);
+  const [recentRecs, setRecentRecs] = useState([]);
+  const [referenceMovie, setReferenceMovie] = useState(null);
   const [topRated, setTopRated] = useState([]);
   const [latestMovies, setLatestMovies] = useState([]);
   const [actionMovies, setActionMovies] = useState([]);
@@ -156,12 +153,6 @@ const Home = () => {
   const [trendingMovies, setTrendingMovies] = useState([]);
   const [tmdbFreshMix, setTmdbFreshMix] = useState([]);
 
-  // Stats & genre favorit pengguna — dipakai handler fetchUserData di bawah.
-  // (dipertahankan apa adanya sesuai logic asli; pastikan dua state ini
-  // juga sudah dideklarasikan persis seperti ini di file produksimu)
-  const [userStats, setUserStats] = useState(null);
-  const [genreDist, setGenreDist] = useState([]);
-
   const [leaderboard, setLeaderboard] = useState([]);
   const [recentActivity, setRecentActivity] = useState([]);
 
@@ -170,7 +161,6 @@ const Home = () => {
   const [recError, setRecError] = useState(false);
 
   const userId = activeUser?.user_id ?? activeUser?.id ?? null;
-
   const fetchedRef = useRef(false);
 
   // ── 1. Fetch data statis ──
@@ -208,6 +198,7 @@ const Home = () => {
 
       const trendingMoviesList = trending?.status === 'ok' ? normalizeMovies(trending.movies) : [];
       const nowPlayingMoviesList = now?.status === 'ok' ? normalizeMovies(now.movies) : [];
+
       const freshPool = [
         ...trendingMoviesList.slice(0, 4),
         ...nowPlayingMoviesList.slice(0, 3),
@@ -215,7 +206,6 @@ const Home = () => {
 
       if (trendingMoviesList.length > 0) {
         setTrendingMovies(trendingMoviesList);
-        setFeaturedMovie(trendingMoviesList[0] ?? null);
       }
       if (top?.status === 'ok') {
         const weightedTop = normalizeMovies(top.movies)
@@ -241,85 +231,23 @@ const Home = () => {
         setRecentActivity(stats.recent_activity || []);
       }
       setTmdbFreshMix(freshPool);
-
       setLoadingStatic(false);
     };
 
     fetchStatic();
   }, []);
 
-  // ── 2. Fetch data pengguna (stats & genre favorit) ──
-  useEffect(() => {
-    if (!userId) return;
-
-    const fetchUserData = async () => {
-      try {
-        const historyRes = await fetch(`${API_BASE_URL}/user/${userId}/history?limit=100`);
-        const historyData = await historyRes.json();
-
-        const watchlistRes = await fetch(`${API_BASE_URL}/watchlist/${userId}`);
-        const watchlistData = await watchlistRes.json();
-
-        const watchedRes = await fetch(`${API_BASE_URL}/watched/${userId}`);
-        const watchedData = await watchedRes.json();
-
-        const threadsRes = await fetch(`${API_BASE_URL}/community/posts?limit=20`);
-        const threadsData = await threadsRes.json();
-
-        const userThreadsCount = threadsData.status === 'ok'
-          ? (threadsData.posts || []).filter(t => t.user_id === userId).length
-          : 0;
-
-        const totalRatings = historyData.status === 'ok' ? historyData.total : 0;
-        const totalWatchlist = watchlistData.status === 'ok' ? (watchlistData.watchlist?.length || 0) : 0;
-        const totalWatched = watchedData.status === 'ok' ? (watchedData.watched_list?.length || 0) : 0;
-
-        setUserStats({
-          totalRating: totalRatings,
-          totalWatchlist,
-          totalWatched,
-          totalThreads: userThreadsCount
-        });
-
-        if (historyData.status === 'ok' && historyData.ratings) {
-          const counts = {};
-          historyData.ratings.forEach(item => {
-            if (item.genres) {
-              item.genres.split('|').forEach(g => {
-                const cleanGenre = g.trim();
-                if (cleanGenre) {
-                  counts[cleanGenre] = (counts[cleanGenre] || 0) + 1;
-                }
-              });
-            }
-          });
-
-          const sortedGenres = Object.entries(counts)
-            .map(([genre, count]) => ({ genre, count }))
-            .sort((a, b) => b.count - a.count)
-            .slice(0, 5);
-
-          setGenreDist(sortedGenres);
-        }
-
-      } catch (err) {
-        console.error("Gagal memuat statistik pengguna di home:", err);
-      }
-    };
-
-    fetchUserData();
-  }, [userId]);
-
-  // ── 3. Fetch rekomendasi ML ──
+  // ── 3. Fetch rekomendasi ML (Anti-Infinite Loop) ──
   useEffect(() => {
     if (!userId) return;
 
     let cancelled = false;
-    const initLoading = async () => {
-      setLoadingRec(true);
-      setRecError(false);
-    };
-    initLoading();
+    Promise.resolve().then(() => {
+      if (!cancelled) {
+        setLoadingRec(true);
+        setRecError(false);
+      }
+    });
 
     const fetchRec = async () => {
       try {
@@ -328,7 +256,7 @@ const Home = () => {
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id: userId, top_n: 6 }),
+            body: JSON.stringify({ user_id: Number(userId), top_n: 6 }),
           },
           15000
         );
@@ -343,24 +271,29 @@ const Home = () => {
         if (res.ok && data.status === 'ok' && list.length > 0) {
           const normalized = normalizeMovies(list);
           if (normalized.length > 0) {
-            setRecommended(mergeRecommendationBuckets(normalized, tmdbFreshMix, 6));
+            // PERBAIKAN 2: Pastikan data tmdbFreshMix ikut dinormalisasi sebelum masuk pemisah agar filtering key string sukses
+            const normalizedFresh = normalizeMovies(tmdbFreshMix);
+            setRecommended(mergeRecommendationBuckets(normalized, normalizedFresh, 6));
           }
+          const basedOnRecent = data?.based_on_recent || {};
+          setReferenceMovie(basedOnRecent.reference_movie || null);
+          setRecentRecs(
+            normalizeMovies((basedOnRecent.movies || []).map((movie) => ({
+              ...movie,
+              _recommendation_source: 'recent',
+              recommendation_source: 'recent',
+            }))).slice(0, 6)
+          );
         } else {
           setRecError(true);
         }
       } catch (err) {
         if (!cancelled) {
-          console.warn('[Home] /recommend gagal, pakai fallback trending:', err.message);
+          console.warn('[Home] /recommend gagal, pakai fallback:', err.message);
           setRecError(true);
         }
       } finally {
         if (!cancelled) {
-          const fallback = tmdbFreshMix.length > 0
-            ? tmdbFreshMix.slice(0, 6)
-            : trendingMovies.slice(0, 6);
-          if (fallback.length > 0 && recommended.length === 0) {
-            setRecommended(fallback);
-          }
           setLoadingRec(false);
         }
       }
@@ -368,14 +301,25 @@ const Home = () => {
 
     fetchRec();
     return () => { cancelled = true; };
-  }, [userId, tmdbFreshMix, trendingMovies, recommended.length]);
+  }, [userId, tmdbFreshMix]);
+
+  const displayRecommended = userId
+    ? recommended
+    : (recommended.length > 0
+      ? recommended
+      : (tmdbFreshMix.length > 0 ? tmdbFreshMix.slice(0, 6) : trendingMovies.slice(0, 6)));
+
+  const handleOpenDetail = (movie) => {
+    setSelectedMovie(movie);
+  };
 
   const displayName = activeUser?.username || activeUser?.name || 'Pengunjung';
-  const topGenre = genreDist[0]?.genre ?? null;
 
   return (
-    <div className="space-y-10 pb-12">
+    <div className="relative isolate space-y-10 pb-12">
+      <FireflyBackground />
 
+      <div className="relative z-10">
       {/* ── Header Dashboard Sapaan ── */}
       <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-white/[0.05] pb-6 mt-4 gap-4">
         <div>
@@ -420,19 +364,8 @@ const Home = () => {
           {/* ══════════════ Kolom Kiri: Main Dashboard Content ══════════════ */}
           <div className="space-y-10 min-w-0">
 
-            {/* ── Hero Banner (lebih besar & jadi focal point pertama) ── */}
-            <section>
-              <SectionHeading icon="fas fa-fire" iconColor="text-orange-400" title="Sorotan Hari Ini" />
-              {featuredMovie ? (
-                <AmbientBanner movie={featuredMovie} />
-              ) : (
-                <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-10 text-center">
-                  <p className="text-white/30 text-sm">Belum ada film unggulan.</p>
-                </div>
-              )}
-            </section>
-
-            {/* ── Rekomendasi ML (dibuat lebih menonjol, dibungkus card) ── */}
+            {/* ── Hero Banner ── */}
+            {/* ── Rekomendasi ML AI ── */}
             <section className="rounded-[1.75rem] border border-indigo-500/[0.12] bg-gradient-to-br from-indigo-500/[0.06] via-transparent to-transparent p-5 md:p-6">
               <SectionHeading
                 icon="fas fa-magic"
@@ -461,10 +394,13 @@ const Home = () => {
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                   {Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={i} />)}
                 </div>
-              ) : recommended.length > 0 ? (
+              ) : displayRecommended.length > 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 md:gap-5">
-                  {recommended.map((movie, index) => (
-                    <MovieCard key={`${movie.movieId}-${index}`} movie={movie} />
+                  {displayRecommended.map((movie, index) => (
+                    <div key={`${movie.movieId}-${index}`}>
+                      {/* PERBAIKAN 3: Lempar onClickDetail ke MovieCard AI agar modal terbuka sukses */}
+                      <MovieCard movie={movie} onClickDetail={handleOpenDetail} />
+                    </div>
                   ))}
                 </div>
               ) : (
@@ -474,114 +410,104 @@ const Home = () => {
               )}
             </section>
 
-            {/* ── Divider tipis sebelum deretan koleksi tematik ── */}
+            {referenceMovie && recentRecs.length > 0 && (
+              <MovieSection
+                icon="fas fa-history"
+                iconColor="text-emerald-400"
+                title={`Karena kamu menonton "${referenceMovie}"`}
+                badge="recent"
+                movies={recentRecs}
+                onClickDetail={handleOpenDetail}
+              />
+            )}
+
             <div className="flex items-center gap-3 pt-2">
               <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/25">Jelajahi Koleksi</span>
               <div className="h-px flex-1 bg-white/[0.06]" />
             </div>
 
-            {/* ── Tayang Sekarang ── */}
             <MovieSection
               icon="fas fa-ticket-alt"
               iconColor="text-pink-400"
               title="Tayang Sekarang"
               badge="LIVE"
               movies={nowPlaying}
-              onClickDetail={setSelectedMovie}
+              onClickDetail={handleOpenDetail}
             />
 
-            {/* ── Trending ── */}
             <MovieSection
               icon="fas fa-chart-line"
               iconColor="text-cyan-400"
               title="Trending Film"
               movies={trendingMovies}
-              onClickDetail={setSelectedMovie}
+              onClickDetail={handleOpenDetail}
             />
 
-            {/* ── Rating Tertinggi ── */}
             <MovieSection
               icon="fas fa-star"
               iconColor="text-yellow-400"
               title="Rating Tertinggi"
               movies={topRated}
-              onClickDetail={setSelectedMovie}
+              onClickDetail={handleOpenDetail}
             />
 
-            {/* ── Rilis Terbaru ── */}
             <MovieSection
               icon="fas fa-calendar-alt"
               iconColor="text-green-400"
               title="Rilis Terbaru"
               movies={latestMovies}
-              onClickDetail={setSelectedMovie}
+              onClickDetail={handleOpenDetail}
             />
 
-            {/* ── Divider genre ── */}
             <div className="flex items-center gap-3 pt-2">
               <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/25">Berdasarkan Genre</span>
               <div className="h-px flex-1 bg-white/[0.06]" />
             </div>
 
-            {/* ── Aksi ── */}
             <MovieSection
               icon="fas fa-bomb"
               iconColor="text-red-400"
               title="Aksi Mendebarkan"
               movies={actionMovies}
-              onClickDetail={setSelectedMovie}
+              onClickDetail={handleOpenDetail}
             />
 
-            {/* ── Komedi ── */}
             <MovieSection
               icon="fas fa-laugh"
               iconColor="text-yellow-400"
               title="Komedi Terlucu"
               movies={comedyMovies}
-              onClickDetail={setSelectedMovie}
+              onClickDetail={handleOpenDetail}
             />
 
-            {/* ── Drama ── */}
             <MovieSection
               icon="fas fa-mask"
               iconColor="text-blue-400"
               title="Kisah Drama Pilihan"
               movies={dramaMovies}
-              onClickDetail={setSelectedMovie}
+              onClickDetail={handleOpenDetail}
             />
 
-            {/* ── Horor ── */}
             <MovieSection
               icon="fas fa-ghost"
               iconColor="text-purple-400"
               title="Horor Menyeramkan"
               movies={horrorMovies}
-              onClickDetail={setSelectedMovie}
+              onClickDetail={handleOpenDetail}
             />
 
-            {/* ── Sci-Fi ── */}
             <MovieSection
               icon="fas fa-rocket"
               iconColor="text-teal-400"
               title="Petualangan Sci-Fi"
               movies={scifiMovies}
-              onClickDetail={setSelectedMovie}
+              onClickDetail={handleOpenDetail}
             />
-
-            {/* ── MODAL DIRENDER DI SINI ── */}
-            {selectedMovie && (
-              <MovieDetailModal
-                movie={selectedMovie}
-                onClose={() => setSelectedMovie(null)}
-              />
-            )}
 
           </div>
 
-          {/* ══════════════ Kolom Kanan: Sidebar (Sticky) ══════════════ */}
+          {/* ══════════════ Kolom Kanan: Sidebar ══════════════ */}
           <div className="hidden lg:block shrink-0 space-y-6">
-
-            {/* Container Sidebar - Class 'sticky top-24' sudah dihapus di sini */}
             <div className="space-y-6">
 
               {/* Leaderboard Kontributor */}
@@ -618,7 +544,7 @@ const Home = () => {
                 </div>
               </div>
 
-              {/* Aktivitas Komunitas Terbaru - Kondisi diubah agar kotak selalu tampil */}
+              {/* Aktivitas Komunitas Terbaru */}
               <div className="bg-white/[0.01] border border-white/[0.05] rounded-3xl p-5 space-y-4">
                 <div>
                   <h3 className="text-sm font-black text-white flex items-center gap-2">
@@ -664,6 +590,15 @@ const Home = () => {
 
         </div>
       )}
+
+      {/* ── DETAIL MODAL KINI MENYELIMUTI SELURUH AREA CARD KLIK ── */}
+      {selectedMovie && (
+        <MovieDetailModal
+          movie={selectedMovie}
+          onClose={() => setSelectedMovie(null)}
+        />
+      )}
+      </div>
     </div>
   );
 };

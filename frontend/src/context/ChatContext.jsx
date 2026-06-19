@@ -13,13 +13,13 @@ export const ChatProvider = ({ children }) => {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [targetUser, setTargetUser] = useState(null);
 
-  // ── Notification realtime state ──────────────────────────────
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const socketRef = useRef(null);
 
-  const userId = user?.user_id ?? user?.id;
+  const activeUser = user || JSON.parse(localStorage.getItem('user') || '{}');
+  const userId = activeUser?.user_id || activeUser?.id;
 
-  // ── Persistent SocketIO connection untuk notifikasi ──────────
+  // Persistent SocketIO connection untuk notifikasi
   useEffect(() => {
     if (!userId) return;
 
@@ -27,17 +27,11 @@ export const ChatProvider = ({ children }) => {
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      // Bergabung ke room notifikasi pribadi
       socket.emit('join_notifications', { user_id: userId });
     });
 
     socket.on('new_notification', () => {
-      // Setiap ada notifikasi baru → tambah unread count
       setUnreadNotifCount(prev => prev + 1);
-    });
-
-    socket.on('disconnect', () => {
-      console.log('Notification socket disconnected');
     });
 
     return () => {
@@ -46,10 +40,53 @@ export const ChatProvider = ({ children }) => {
     };
   }, [userId]);
 
-  // ── Chat handlers ─────────────────────────────────────────────
-  const openChatWithUser = (user) => {
-    setTargetUser(user);
+  // Fetch count awal
+  useEffect(() => {
+    if (!userId) return;
+    fetch(`${API_BASE_URL}/notifications/unread-count/${userId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === 'ok') {
+          setUnreadNotifCount(data.unread_count || 0);
+        }
+      })
+      .catch(err => console.error("Failed fetching unread count:", err));
+  }, [userId]);
+
+  const openChatWithUser = async (rawTargetUser) => {
+    if (!rawTargetUser || !userId) return;
+
+    // PERBAIKAN EKSTRAKSI: cari ID musuh chat dari seluruh kemungkinan key objek
+    const extractedTargetId = rawTargetUser.user_id || rawTargetUser.id || rawTargetUser._id;
+
+    if (!extractedTargetId) {
+      console.error("Gagal membuka obrolan: ID target user tidak ditemukan sama sekali!", rawTargetUser);
+      return;
+    }
+
+    const normalizedTarget = {
+      user_id: extractedTargetId,
+      username: rawTargetUser.username || rawTargetUser.name || 'Pengguna',
+      profile_picture: rawTargetUser.profile_picture || rawTargetUser.avatar || null
+    };
+
+    // Set state secara instan agar laci meluncur keluar lebih responsif
+    setTargetUser(normalizedTarget);
     setIsChatOpen(true);
+
+    try {
+      // Inisialisasi room chat di database background
+      await fetch(`${API_BASE_URL}/chat/conversations/init`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sender_id: Number(userId),
+          receiver_id: Number(extractedTargetId)
+        })
+      });
+    } catch (err) {
+      console.error("Gagal mendaftarkan relasi obrolan ke database backend:", err);
+    }
   };
 
   const closeChat = () => {

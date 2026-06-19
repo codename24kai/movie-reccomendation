@@ -14,18 +14,22 @@
 """
 
 from flask import Flask, request, jsonify
+from flask_socketio import SocketIO
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo 
 import pandas as pd
 import numpy as np
 import pickle
 import os
 import logging
 import requests
+import bson
 import re
 import uuid
+import random
 from pymongo import MongoClient
 import concurrent.futures
 from dotenv import load_dotenv
@@ -158,13 +162,22 @@ try:
         'Thriller', 'War', 'Western'
     ]
 
-    # Pra-hitung rf_score untuk semua film
-    rf_data_df['rf_score'] = rf_model.predict(rf_data_df[RF_FEATURES].fillna(0))
+    # PERBAIKAN: Cek apakah rf_score sudah pernah dihitung dan disimpan di CSV
+    if 'rf_score' not in rf_data_df.columns:
+        print("⏳ Menghitung rf_score massal untuk pertama kali (harap tunggu beberapa menit)...")
+        rf_data_df['rf_score'] = rf_model.predict(rf_data_df[RF_FEATURES].fillna(0))
+        
+        # Simpan kembali ke dalam CSV agar tidak perlu dihitung saat restart berikutnya
+        rf_data_df.to_csv(f"{DATA_DIR}/df_master.csv", index=False)
+        print("✅ Perhitungan rf_score berhasil disimpan ke df_master.csv secara permanen!")
+    else:
+        print("✅ Data rf_score sudah tersedia, tidak perlu menghitung ulang.")
+
     print("✅ Datasets loaded")
     MODEL_READY = True
 
 except Exception as e:
-    logger.warning(f"⚠️  Model/data belum tersedia: {e}")
+    logger.warning(f"⚠️ Model/data belum tersedia: {e}")
     logger.warning("   API tetap jalan — endpoint akan return error informatif.")
     MODEL_READY = False
 
@@ -638,6 +651,7 @@ def toggle_watchlist():
     data = request.json
     user_id = data.get('user_id')
     movie_id = data.get('movie_id')
+    action = (data.get('action') or 'toggle').lower()
 
     # Pastikan movie_id selalu integer agar konsisten di MongoDB
     try:
@@ -652,7 +666,16 @@ def toggle_watchlist():
     watchlist = user.get('watchlist', [])
     
     # Logika Toggle
-    if movie_id in watchlist:
+    if action == 'add':
+        if movie_id not in watchlist:
+            users_collection.update_one({"user_id": user_id}, {"$push": {"watchlist": movie_id}})
+        message = "Film ditambahkan ke Watchlist"
+        is_added = True
+    elif action == 'remove':
+        users_collection.update_one({"user_id": user_id}, {"$pull": {"watchlist": movie_id}})
+        message = "Film dihapus dari Watchlist"
+        is_added = False
+    elif movie_id in watchlist:
         users_collection.update_one({"user_id": user_id}, {"$pull": {"watchlist": movie_id}})
         message = "Film dihapus dari Watchlist"
         is_added = False
@@ -707,7 +730,7 @@ def health_check():
     })
 
 
-# ── Endpoint Utama: Rekomendasi Hybrid ──────────────────────────
+# ── Endpoint Utama: Rekomendasi Hybrid (Anti-Duplikat & Dinamis) ──────────────────────────
 @app.route("/recommend", methods=["POST"])
 def recommend():
     err = check_model()
@@ -739,68 +762,297 @@ def recommend():
     )
 
     try:
-        # 1. Ambil rekomendasi mentah dari gabungan model ML (SVD + RF)
-        raw_recs = get_hybrid_recommendations(user_id, top_n * 2, svd_weight, rf_weight) # Ambil lebih banyak untuk cadangan filter
-        
+        def resolve_tmdb_id(movie_id):
+            if movie_id is None:
+                return None
+            try:
+                movie_int = int(movie_id)
+            except (TypeError, ValueError):
+                return None
+            return int(_movie_id_to_tmdb.get(movie_int, movie_int))
+
+        def fetch_movie_meta(tmdb_id):
+            try:
+                url = f"{TMDB_BASE_URL}/movie/{tmdb_id}?api_key={TMDB_API_KEY}&language=id-ID"
+                res = requests.get(url, timeout=3)
+                if res.status_code == 200:
+                    return res.json()
+            except Exception:
+                return None
+            return None
+
+        def fetch_movie_genres(tmdb_id):
+            movie_meta = fetch_movie_meta(tmdb_id)
+            if movie_meta and movie_meta.get("genres"):
+                return [g.get("name") for g in movie_meta.get("genres", []) if g.get("name")]
+
+            movie_doc = movies_collection.find_one(
+                {"$or": [{"movie_id": tmdb_id}, {"movie_id": str(tmdb_id)}, {"movieId": tmdb_id}]},
+                {"genres": 1}
+            )
+            if movie_doc and movie_doc.get("genres"):
+                return [g.strip() for g in str(movie_doc["genres"]).split("|") if g.strip()]
+            return []
+
+        def fetch_movie_title(tmdb_id):
+            movie_meta = fetch_movie_meta(tmdb_id)
+            if movie_meta and movie_meta.get("title"):
+                return movie_meta.get("title")
+            movie_doc = movies_collection.find_one(
+                {"$or": [{"movie_id": tmdb_id}, {"movie_id": str(tmdb_id)}, {"movieId": tmdb_id}]},
+                {"title": 1}
+            )
+            return (movie_doc or {}).get("title") or "Film terbaru"
+
+        def fetch_genre_discover(genre_name, page=1, limit=10):
+            genre_query = REVERSE_GENRES.get(genre_name.lower())
+            if not genre_query:
+                return []
+            url = (
+                f"{TMDB_BASE_URL}/discover/movie?api_key={TMDB_API_KEY}"
+                f"&language=id-ID&with_genres={genre_query}&sort_by=popularity.desc&page={page}"
+            )
+            try:
+                res = requests.get(url, timeout=5)
+                if res.status_code != 200:
+                    return []
+                results = []
+                for movie in res.json().get("results", [])[:limit]:
+                    if movie.get("poster_path"):
+                        results.append({
+                            "movieId": movie.get("id"),
+                            "movie_id": movie.get("id"),
+                            "tmdb_id": movie.get("id"),
+                            "title": movie.get("title"),
+                            "genres": genre_name,
+                            "poster_url": f"https://image.tmdb.org/t/p/w500{movie.get('poster_path')}",
+                            "backdrop_url": f"https://image.tmdb.org/t/p/w1280{movie.get('backdrop_path')}" if movie.get('backdrop_path') else None,
+                            "overview": movie.get("overview", ""),
+                            "vote_average": movie.get("vote_average", 0),
+                            "vote_count": movie.get("vote_count", 0),
+                            "release_year": movie.get("release_date")[:4] if movie.get("release_date") else "",
+                            "hybrid_score": movie.get("popularity", 0) / 1000
+                        })
+                return results
+            except Exception:
+                return []
+
+        def to_iso(value):
+            if isinstance(value, datetime):
+                return value.isoformat()
+            return value
+
+        user_history_ratings = list(ratings_collection.find({"user_id": user_id}).sort("created_at", -1))
+        user_history_watchlist = list(watchlist_collection.find({"user_id": user_id}).sort("created_at", -1))
+        user_history_watched = list(watched_collection.find({"user_id": user_id}).sort("created_at", -1))
+
+        seen_tmdb_ids = set()
+        genre_counts = {}
+
+        def add_genre_counts(tmdb_id):
+            for genre in fetch_movie_genres(tmdb_id):
+                clean_genre = genre.strip()
+                if clean_genre:
+                    genre_counts[clean_genre] = genre_counts.get(clean_genre, 0) + 1
+
+        for item in user_history_watchlist + user_history_watched:
+            tmdb_id = resolve_tmdb_id(item.get("movie_id"))
+            if tmdb_id is None:
+                continue
+            seen_tmdb_ids.add(tmdb_id)
+            add_genre_counts(tmdb_id)
+
+        for item in user_history_ratings:
+            tmdb_id = resolve_tmdb_id(item.get("movie_id"))
+            if tmdb_id is None:
+                continue
+            seen_tmdb_ids.add(tmdb_id)
+            if float(item.get("rating") or 0) >= 4:
+                add_genre_counts(tmdb_id)
+
+        user_profile_genres = [genre for genre, _ in sorted(genre_counts.items(), key=lambda kv: (-kv[1], kv[0].lower()))[:3]]
+        if not user_profile_genres:
+            user_profile_genres = ["Action", "Drama"]
+
+        history_candidates = []
+        for item in user_history_watched:
+            tmdb_id = resolve_tmdb_id(item.get("movie_id"))
+            if tmdb_id is None:
+                continue
+            history_candidates.append({
+                "tmdb_id": tmdb_id,
+                "title": fetch_movie_title(tmdb_id),
+                "genres": "|".join(fetch_movie_genres(tmdb_id)),
+                "created_at": to_iso(item.get("created_at")),
+                "score": 5.0,
+            })
+            break
+
+        if not history_candidates:
+            for item in user_history_ratings:
+                rating_value = float(item.get("rating") or 0)
+                if rating_value < 4:
+                    continue
+                tmdb_id = resolve_tmdb_id(item.get("movie_id"))
+                if tmdb_id is None:
+                    continue
+                history_candidates.append({
+                    "tmdb_id": tmdb_id,
+                    "title": fetch_movie_title(tmdb_id),
+                    "genres": "|".join(fetch_movie_genres(tmdb_id)),
+                    "created_at": to_iso(item.get("created_at")),
+                    "score": rating_value,
+                })
+                break
+
         verified_recs = []
-        
-        # 2. Validasi & lengkapi data menggunakan metadata TMDB asli
+        candidate_movies = []
+
+        def add_candidate(movie_data, source="genre"):
+            if not movie_data:
+                return
+            mid = resolve_tmdb_id(movie_data.get("movieId") or movie_data.get("movie_id") or movie_data.get("tmdb_id") or movie_data.get("id"))
+            if mid is None or mid in seen_tmdb_ids:
+                return
+            genres = movie_data.get("genres")
+            if isinstance(genres, list):
+                genres = "|".join([g for g in genres if g])
+            candidate_movies.append({
+                "movieId": mid,
+                "movie_id": mid,
+                "tmdb_id": mid,
+                "title": movie_data.get("title") or fetch_movie_title(mid),
+                "genres": genres or "|".join(fetch_movie_genres(mid)),
+                "poster_url": movie_data.get("poster_url") or movie_data.get("poster_path"),
+                "backdrop_url": movie_data.get("backdrop_url"),
+                "overview": movie_data.get("overview", ""),
+                "vote_average": movie_data.get("vote_average", 0),
+                "vote_count": movie_data.get("vote_count", 0),
+                "release_year": movie_data.get("release_year") or (movie_data.get("release_date")[:4] if movie_data.get("release_date") else ""),
+                "runtime": movie_data.get("runtime"),
+                "tagline": movie_data.get("tagline"),
+                "imdb_id": movie_data.get("imdb_id"),
+                "imdb_url": movie_data.get("imdb_url"),
+                "svd_score": movie_data.get("svd_score"),
+                "rf_score": movie_data.get("rf_score"),
+                "hybrid_score": movie_data.get("hybrid_score", 0),
+                "_recommendation_source": source
+            })
+
+        # Prioritas: hasil model hybrid, lalu rekomendasi berbasis genre gabungan watchlist+watchedlist
+        raw_recs = get_hybrid_recommendations(user_id, top_n * 4, svd_weight, rf_weight)
         for item in raw_recs:
+            tmdb_id = resolve_tmdb_id(item.get("movieId") or item.get("movie_id"))
+            if tmdb_id is None or tmdb_id in seen_tmdb_ids:
+                continue
+            tmdb_movie = fetch_movie_meta(tmdb_id)
+            if not tmdb_movie or not tmdb_movie.get("poster_path"):
+                continue
+            add_candidate({
+                "movieId": tmdb_id,
+                "movie_id": tmdb_id,
+                "tmdb_id": tmdb_id,
+                "title": tmdb_movie.get("title") or item.get("title"),
+                "genres": "|".join([g["name"] for g in tmdb_movie.get("genres", []) if g.get("name")]),
+                "poster_url": f"https://image.tmdb.org/t/p/w500{tmdb_movie.get('poster_path')}",
+                "backdrop_url": f"https://image.tmdb.org/t/p/w1280{tmdb_movie.get('backdrop_path')}" if tmdb_movie.get('backdrop_path') else None,
+                "overview": tmdb_movie.get("overview") or item.get("overview", ""),
+                "vote_average": tmdb_movie.get("vote_average") or item.get("vote_average", 0),
+                "vote_count": tmdb_movie.get("vote_count") or item.get("vote_count", 0),
+                "release_year": tmdb_movie.get("release_date")[:4] if tmdb_movie.get("release_date") else item.get("release_year", ""),
+                "runtime": tmdb_movie.get("runtime"),
+                "tagline": tmdb_movie.get("tagline"),
+                "imdb_id": tmdb_movie.get("imdb_id"),
+                "imdb_url": f"https://www.imdb.com/title/{tmdb_movie.get('imdb_id')}/" if tmdb_movie.get("imdb_id") else None,
+                "svd_score": item.get("svd_score"),
+                "rf_score": item.get("rf_score"),
+                "hybrid_score": item.get("hybrid_score", 0)
+            }, source="hybrid")
+
+        if len(candidate_movies) < top_n:
+            try:
+                for genre_name in user_profile_genres:
+                    if len(candidate_movies) >= top_n:
+                        break
+                    genre_results = fetch_genre_discover(genre_name, page=((user_id % 3) + 1), limit=top_n * 2)
+                    for movie in genre_results:
+                        if len(candidate_movies) >= top_n:
+                            break
+                        add_candidate(movie, source="genre")
+            except Exception as genre_err:
+                logger.warning(f"Fallback genre recommendations error: {genre_err}")
+
+        if len(candidate_movies) < top_n:
+            try:
+                fallback_url = f"{TMDB_BASE_URL}/movie/popular?api_key={TMDB_API_KEY}&language=id-ID&page={((user_id % 3) + 1)}"
+                fb_res = requests.get(fallback_url, timeout=3)
+                if fb_res.status_code == 200:
+                    fb_movies = fb_res.json().get("results", [])
+                    random.seed(user_id)
+                    random.shuffle(fb_movies)
+                    for m in fb_movies:
+                        if len(candidate_movies) >= top_n:
+                            break
+                        tid = m.get("id")
+                        if not tid or int(tid) in seen_tmdb_ids or not m.get("poster_path"):
+                            continue
+                        add_candidate({
+                            "movieId": int(tid),
+                            "movie_id": int(tid),
+                            "tmdb_id": int(tid),
+                            "title": m.get("title"),
+                            "genres": "|".join(fetch_movie_genres(tid)),
+                            "poster_url": f"https://image.tmdb.org/t/p/w500{m.get('poster_path')}",
+                            "backdrop_url": f"https://image.tmdb.org/t/p/w1280{m.get('backdrop_path')}" if m.get('backdrop_path') else None,
+                            "overview": m.get("overview", ""),
+                            "vote_average": m.get("vote_average", 0),
+                            "vote_count": m.get("vote_count", 0),
+                            "release_year": m.get("release_date")[:4] if m.get("release_date") else "",
+                            "hybrid_score": 0.0
+                        }, source="fallback")
+            except Exception as fb_err:
+                logger.warning(f"Fallback recommendations error: {fb_err}")
+
+        # final dedupe and limit
+        final_seen = set()
+        for movie in candidate_movies:
+            key = movie.get("tmdb_id")
+            if key in final_seen:
+                continue
+            final_seen.add(key)
+            verified_recs.append(movie)
             if len(verified_recs) >= top_n:
                 break
-                
-            # Ambil ID internal dari model
-            mid = item.get("movieId") or item.get("movie_id")
-            if not mid:
-                continue
-                
-            # Konversi MovieLens ID ke TMDB ID menggunakan dictionary mapping yang kamu miliki
-            tmdb_id = _movie_id_to_tmdb.get(int(mid)) if int(mid) in _movie_id_to_tmdb else mid
-            
-            if not tmdb_id:
-                continue # Lewati jika film tidak memiliki relasi ke TMDB
-                
-            try:
-                # Ambil data real-time langsung dari server TMDB agar judul, poster, dan sinopsisnya 100% akurat
-                tmdb_url = f"{TMDB_BASE_URL}/movie/{tmdb_id}?api_key={TMDB_API_KEY}&language=id-ID"
-                tmdb_res = requests.get(tmdb_url, timeout=3)
-                
-                if tmdb_res.status_code == 200:
-                    tmdb_movie = tmdb_res.json()
-                    
-                    # Pastikan film memiliki poster sebelum dimasukkan ke daftar rekomendasi
-                    poster_path = tmdb_movie.get("poster_path")
-                    if not poster_path:
-                        continue
-                        
-                    # Gabungkan metrik skor dari model ML dengan visual data dari TMDB
-                    formatted_movie = {
-                        "movieId": tmdb_id, # Frontend sekarang membaca tmdb_id sebagai token utama
-                        "movie_id": tmdb_id,
-                        "tmdb_id": tmdb_id,
-                        "title": tmdb_movie.get("title") or item.get("title"),
-                        "genres": "|".join([g["name"] for g in tmdb_movie.get("genres", [])]) if tmdb_movie.get("genres") else item.get("genres", ""),
-                        "poster_url": f"https://image.tmdb.org/t/p/w500{poster_path}",
-                        "backdrop_url": f"https://image.tmdb.org/t/p/w1280{tmdb_movie.get('backdrop_path')}" if tmdb_movie.get('backdrop_path') else None,
-                        "overview": tmdb_movie.get("overview") or item.get("overview", ""),
-                        "vote_average": tmdb_movie.get("vote_average") or item.get("vote_average", 0),
-                        "vote_count": tmdb_movie.get("vote_count") or item.get("vote_count", 0),
-                        "release_year": tmdb_movie.get("release_date")[:4] if tmdb_movie.get("release_date") else item.get("release_year", ""),
-                        "runtime": tmdb_movie.get("runtime"),
-                        "tagline": tmdb_movie.get("tagline"),
-                        "imdb_id": tmdb_movie.get("imdb_id"),
-                        "imdb_url": f"https://www.imdb.com/title/{tmdb_movie.get('imdb_id')}/" if tmdb_movie.get("imdb_id") else None,
-                        
-                        # Pertahankan skor perhitungan model untuk keperluan debugging/analisis backend
-                        "svd_score": item.get("svd_score"),
-                        "rf_score": item.get("rf_score"),
-                        "hybrid_score": item.get("hybrid_score")
-                    }
-                    
-                    verified_recs.append(formatted_movie)
-            except Exception as tmdb_err:
-                logger.warning(f"Gagal sinkronisasi TMDB untuk movieId {mid}: {tmdb_err}")
-                continue
+
+        based_on_recent = {"reference_movie": None, "movies": []}
+        if history_candidates:
+            reference_movie = history_candidates[0]
+            reference_genres = {genre.lower() for genre in reference_movie.get("genres", "").split("|") if genre}
+            based_on_recent["reference_movie"] = reference_movie.get("title")
+
+            similar_movies = []
+            for movie in verified_recs:
+                movie_tmdb_id = resolve_tmdb_id(movie.get("movieId") or movie.get("movie_id") or movie.get("tmdb_id"))
+                if movie_tmdb_id is None or movie_tmdb_id == reference_movie.get("tmdb_id"):
+                    continue
+                movie_genres = {
+                    genre.strip().lower()
+                    for genre in str(movie.get("genres", "")).split("|")
+                    if genre.strip()
+                }
+                overlap = len(reference_genres.intersection(movie_genres))
+                if overlap > 0:
+                    similar_movies.append((overlap, movie))
+
+            if not similar_movies:
+                similar_movies = [(0, movie) for movie in verified_recs]
+
+            based_on_recent["movies"] = [
+                movie for _, movie in sorted(
+                    similar_movies,
+                    key=lambda item: (-item[0], -(float(item[1].get("hybrid_score") or 0)))
+                )
+            ][:6]
 
         return jsonify({
             "status":          "ok",
@@ -809,56 +1061,60 @@ def recommend():
             "total_returned":  len(verified_recs),
             "svd_weight":      svd_weight,
             "rf_weight":       rf_weight,
-            "recommendations": verified_recs
+            "recommendations": verified_recs,
+            "based_on_recent": based_on_recent
         }), 200
 
     except Exception as e:
         logger.error(f"❌ Error generate rekomendasi user_id={user_id}: {e}", exc_info=True)
         return jsonify({
             "status":  "error",
-            "message": "Gagal membuat rekomendasi. Coba beberapa saat lagi.",
+            "message": "Gagal membuat rekomendasi.",
             "detail":  str(e)
         }), 500
-# ── Endpoint Rekomendasi Berbasis Genre ─────────────────────────
+
+
+# ── Endpoint Rekomendasi Berbasis Genre (Anti-Duplikat & Sinkron) ─────────────────────────
 @app.route("/recommend/genre/<int:user_id>", methods=["GET"])
 def recommend_genre(user_id):
-    """
-    Menganalisa riwayat tontonan/rating user untuk menemukan genre favorit,
-    lalu mengambil film dari TMDB berdasarkan genre tersebut.
-    """
     try:
         # Ambil riwayat rating dari MongoDB
         mongo_ratings = list(ratings_collection.find({"user_id": user_id, "rating": {"$gte": 3.5}}))
         
         # Ambil riwayat dari CSV
         csv_ratings = []
-        if user_id in ratings_df['userId'].values:
+        if 'ratings_df' in globals() and user_id in ratings_df['userId'].values:
             user_ratings_df = ratings_df[(ratings_df['userId'] == user_id) & (ratings_df['rating'] >= 3.5)]
             csv_ratings = user_ratings_df['movieId'].tolist()
             
         movie_ids = [r.get("movie_id") for r in mongo_ratings] + csv_ratings
         
-        if not movie_ids:
-            return jsonify({"status": "ok", "genres": [], "recommendations": []}), 200
-            
-        # Hitung frekuensi genre
-        genre_counts = {}
+        # PERBAIKAN 4: Set filter duplikat untuk list genre
+        seen_genre_movie_ids = set()
         for mid in movie_ids:
-            # Ambil tmdb_id
-            tmdb_id = _movie_id_to_tmdb.get(int(mid)) if int(mid) in _movie_id_to_tmdb else mid
-            # Coba cari genre di data film yang ada
-            movie = rf_data_df[rf_data_df['movieId'] == int(mid)]
-            if not movie.empty:
-                for col in RF_FEATURES[1:]: # Skip 'year'
-                    if movie.iloc[0][col] == 1:
-                        genre_counts[col] = genre_counts.get(col, 0) + 1
+            tid = _movie_id_to_tmdb.get(int(mid)) if int(mid) in _movie_id_to_tmdb else mid
+            seen_genre_movie_ids.add(int(tid))
         
-        if not genre_counts:
-            return jsonify({"status": "ok", "genres": [], "recommendations": []}), 200
+        if not movie_ids:
+            # Jika user baru belum ada histori, beri genre populer acak bergantian sesuai user_id
+            default_genres = [["Action", "Adventure"], ["Drama", "Romance"], ["Sci-Fi", "Thriller"]]
+            chosen_genres = default_genres[user_id % len(default_genres)]
+            top_genre_names = chosen_genres
+        else:
+            # Hitung frekuensi genre
+            genre_counts = {}
+            for mid in movie_ids:
+                movie = rf_data_df[rf_data_df['movieId'] == int(mid)] if 'rf_data_df' in globals() else None
+                if movie is not None and not movie.empty:
+                    for col in RF_FEATURES[1:]:
+                        if movie.iloc[0][col] == 1:
+                            genre_counts[col] = genre_counts.get(col, 0) + 1
             
-        # Ambil 2 genre teratas
-        top_genres = sorted(genre_counts.items(), key=lambda x: x[1], reverse=True)[:2]
-        top_genre_names = [g[0] for g in top_genres]
+            if not genre_counts:
+                top_genre_names = ["Action"]
+            else:
+                top_genres = sorted(genre_counts.items(), key=lambda x: x[1], reverse=True)[:2]
+                top_genre_names = [g[0] for g in top_genres]
         
         # Mapping nama genre ke TMDB ID
         top_genre_ids = []
@@ -874,12 +1130,41 @@ def recommend_genre(user_id):
         url = f"{TMDB_BASE_URL}/discover/movie?api_key={TMDB_API_KEY}&language=id-ID&with_genres={genre_query}&sort_by=popularity.desc&page=1"
         res = requests.get(url, timeout=5).json()
         
-        movies = [format_tmdb_movie(m) for m in res.get('results', [])[:10]]
+        raw_results = res.get('results', [])
+        formatted_movies = []
+        
+        # PERBAIKAN 5: Filter agar film yang masuk ke list rekomendasi genre tidak ada yang kembar
+        for m in raw_results:
+            tid = m.get("id")
+            if not tid or int(tid) in seen_genre_movie_ids:
+                continue
+            if not m.get("poster_path"):
+                continue
+                
+            # Gunakan helper bawaan kamu format_tmdb_movie atau mapping manual aman
+            if 'format_tmdb_movie' in globals():
+                formatted_movies.append(format_tmdb_movie(m))
+            else:
+                formatted_movies.append({
+                    "movieId": int(tid),
+                    "movie_id": int(tid),
+                    "tmdb_id": int(tid),
+                    "title": m.get("title"),
+                    "genres": "|".join(top_genre_names),
+                    "poster_url": f"https://image.tmdb.org/t/p/w500{m.get('poster_path')}",
+                    "backdrop_url": f"https://image.tmdb.org/t/p/w1280{m.get('backdrop_path')}" if m.get('backdrop_path') else None,
+                    "overview": m.get("overview", ""),
+                    "vote_average": m.get("vote_average", 0),
+                    "release_year": m.get("release_date")[:4] if m.get("release_date") else ""
+                })
+            seen_genre_movie_ids.add(int(tid))
+            if len(formatted_movies) >= 10:
+                break
         
         return jsonify({
             "status": "ok", 
             "genres": top_genre_names, 
-            "recommendations": movies
+            "recommendations": formatted_movies
         }), 200
         
     except Exception as e:
@@ -890,44 +1175,128 @@ def recommend_genre(user_id):
 @app.route("/stats/home", methods=["GET"])
 def home_stats():
     try:
-        # Top Contributors (Aktivitas terbanyak: Rating + Review + Post)
-        # Sederhana: Hitung jumlah rating tiap user di MongoDB
-        pipeline = [
-            {"$group": {"_id": "$user_id", "count": {"$sum": 1}}},
-            {"$sort": {"count": -1}},
-            {"$limit": 5}
+        rating_pipeline = [
+            {"$group": {"_id": "$user_id", "rating_count": {"$sum": 1}, "rating_review_count": {"$sum": {"$cond": [{"$gt": [{"$strLenCP": {"$ifNull": ["$review", ""]}}, 0]}, 1, 0]}}}},
         ]
-        top_raters = list(ratings_collection.aggregate(pipeline))
-        
-        top_contributors = []
-        for tr in top_raters:
-            uid = tr["_id"]
+        post_pipeline = [
+            {"$group": {"_id": "$author.user_id", "post_count": {"$sum": 1}}},
+        ]
+        comment_pipeline = [
+            {"$group": {"_id": "$user_id", "comment_count": {"$sum": 1}}},
+        ]
+
+        score_map = {}
+
+        for item in ratings_collection.aggregate(rating_pipeline):
+            uid = item.get("_id")
+            if uid is None:
+                continue
+            score_map.setdefault(uid, {"rating_count": 0, "post_count": 0, "comment_count": 0})
+            score_map[uid]["rating_count"] += item.get("rating_count", 0)
+            score_map[uid]["review_count"] = score_map[uid].get("review_count", 0) + item.get("rating_review_count", 0)
+
+        for item in threads_collection.aggregate(post_pipeline):
+            uid = item.get("_id")
+            if uid is None:
+                continue
+            score_map.setdefault(uid, {"rating_count": 0, "post_count": 0, "comment_count": 0})
+            score_map[uid]["post_count"] += item.get("post_count", 0)
+
+        for item in comments_collection.aggregate(comment_pipeline):
+            uid = item.get("_id")
+            if uid is None:
+                continue
+            score_map.setdefault(uid, {"rating_count": 0, "post_count": 0, "comment_count": 0})
+            score_map[uid]["comment_count"] += item.get("comment_count", 0)
+
+        contributors = []
+        for uid, counts in score_map.items():
             user_data = users_collection.find_one({"user_id": uid})
-            if user_data:
-                top_contributors.append({
-                    "user_id": uid,
-                    "username": user_data.get("username", "Unknown"),
-                    "profile_picture": user_data.get("profile_picture"),
-                    "score": tr["count"] * 10 # Contoh perhitungan skor
-                })
-                
-        # Recent Activity (Review terbaru)
-        recent_reviews = list(reviews_collection.find().sort("created_at", -1).limit(5))
-        recent_activity = []
-        for r in recent_reviews:
-            r['_id'] = str(r['_id'])
-            user_data = users_collection.find_one({"user_id": r["user_id"]})
-            recent_activity.append({
-                "type": "review",
-                "user": {
-                    "user_id": r["user_id"],
-                    "username": user_data.get("username", "Unknown") if user_data else "Unknown",
-                    "profile_picture": user_data.get("profile_picture") if user_data else None
-                },
-                "movie_id": r["movie_id"],
-                "content": r["content"],
-                "created_at": r.get("created_at")
+            if not user_data:
+                continue
+            total_score = (counts.get("rating_count", 0) * 3) + (counts.get("review_count", 0) * 4) + (counts.get("post_count", 0) * 5) + (counts.get("comment_count", 0) * 2)
+            contributors.append({
+                "user_id": uid,
+                "username": user_data.get("username", "Unknown"),
+                "profile_picture": user_data.get("profile_picture"),
+                "score": total_score
             })
+
+        top_contributors = sorted(contributors, key=lambda item: item["score"], reverse=True)[:5]
+
+        recent_rating_pipeline = [
+            {"$match": {"review": {"$ne": "", "$exists": True}}},
+            {"$sort": {"created_at": -1}},
+            {"$limit": 5},
+            {
+                "$lookup": {
+                    "from": "users",
+                    "localField": "user_id",
+                    "foreignField": "user_id",
+                    "as": "user"
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "movies",
+                    "let": {"mid": "$movie_id"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": [{"$toString": "$movie_id"}, {"$toString": "$$mid"}]}}}
+                    ],
+                    "as": "movie"
+                }
+            }
+        ]
+        recent_posts_pipeline = [
+            {"$sort": {"created_at": -1}},
+            {"$limit": 5},
+            {
+                "$lookup": {
+                    "from": "users",
+                    "localField": "author.user_id",
+                    "foreignField": "user_id",
+                    "as": "user"
+                }
+            }
+        ]
+
+        recent_activity_candidates = []
+        for item in ratings_collection.aggregate(recent_rating_pipeline):
+            user_data = (item.get("user") or [{}])[0]
+            movie_data = (item.get("movie") or [{}])[0]
+            recent_activity_candidates.append({
+                "type": "review",
+                "created_at": item.get("created_at"),
+                "user": {
+                    "user_id": item.get("user_id"),
+                    "username": user_data.get("username", "Unknown"),
+                    "profile_picture": user_data.get("profile_picture")
+                },
+                "movie_id": item.get("movie_id"),
+                "movie_title": movie_data.get("title"),
+                "content": item.get("review") or item.get("content") or "",
+            })
+
+        for item in threads_collection.aggregate(recent_posts_pipeline):
+            user_data = (item.get("user") or [{}])[0]
+            recent_activity_candidates.append({
+                "type": "post",
+                "created_at": item.get("created_at"),
+                "user": {
+                    "user_id": item.get("author", {}).get("user_id"),
+                    "username": user_data.get("username", "Unknown"),
+                    "profile_picture": user_data.get("profile_picture")
+                },
+                "movie_id": item.get("movie_id"),
+                "movie_title": item.get("movie_title"),
+                "content": item.get("content", ""),
+            })
+
+        recent_activity = sorted(
+            recent_activity_candidates,
+            key=lambda item: item.get("created_at") or datetime.min,
+            reverse=True
+        )[:5]
             
         return jsonify({
             "status": "ok",
@@ -1086,72 +1455,127 @@ def get_movie_detail_endpoint(movie_id):
 
 
 # ── Endpoint: History Rating User ──────────────────────────────
-@app.route("/user/<int:user_id>/history", methods=["GET"])
-def user_history(user_id: int):
-    """
-    GET /user/25062/history?limit=20
-    Ambil history rating yang sudah diberikan user (CSV + MongoDB).
-    """
-    limit = min(int(request.args.get("limit", 20)), 100)
-
-    csv_ratings = []
-    if not ratings_df.empty and user_id in ratings_df['userId'].values:
-        user_r = ratings_df[ratings_df['userId'] == user_id].copy()
-        merged = user_r.merge(
-            movies_df[['movieId', 'title', 'genres']],
-            on='movieId', how='left'
-        )
-        for _, row in merged.iterrows():
-            csv_ratings.append({
-                "movieId": int(row["movieId"]),
-                "title": row["title"] if pd.notna(row["title"]) else "Unknown",
-                "genres": row["genres"] if pd.notna(row["genres"]) else "",
-                "rating": float(row["rating"]),
-                "timestamp": int(row["timestamp"]) if "timestamp" in row else 0
-            })
-
-    mongo_ratings = []
+@app.route('/api/user/<int:user_id>/history', methods=['GET'])
+def get_user_rating_history(user_id):
     try:
-        ratings_cursor = ratings_collection.find({"user_id": user_id})
-        for r in ratings_cursor:
-            mid = int(r["movie_id"])
-            
-            title = "Unknown"
-            genres = ""
-            if not movies_df.empty and mid in movies_df['movieId'].values:
-                m_info = movies_df[movies_df['movieId'] == mid].iloc[0]
-                title = m_info["title"]
-                genres = m_info["genres"]
+        limit = int(request.args.get('limit', 20))
 
-            mongo_ratings.append({
-                "movieId": mid,
-                "title": title,
-                "genres": genres,
-                "rating": float(r["rating"]),
-                "timestamp": int(r.get("created_at", datetime.utcnow()).timestamp())
-            })
-    except Exception as e:
-        logger.warning(f"⚠️ Gagal memuat rating MongoDB untuk user {user_id}: {e}")
+        def resolve_movie_title_and_meta(movie_id):
+            movie_doc = None
+            try:
+                movie_int = int(movie_id)
+            except Exception:
+                movie_int = None
 
-    combined_dict = {}
-    
-    for r in csv_ratings:
-        combined_dict[r["movieId"]] = r
+            if movie_int is not None:
+                movie_doc = movies_collection.find_one(
+                    {"$or": [{"movie_id": movie_int}, {"movie_id": str(movie_int)}, {"movieId": movie_int}]},
+                    {"title": 1, "genres": 1, "poster_path": 1}
+                )
+                if not movie_doc and movie_int in _movie_id_to_tmdb:
+                    tmdb_id = _movie_id_to_tmdb[movie_int]
+                    movie_doc = movies_collection.find_one(
+                        {"$or": [{"movie_id": tmdb_id}, {"movie_id": str(tmdb_id)}, {"movieId": tmdb_id}]},
+                        {"title": 1, "genres": 1, "poster_path": 1}
+                    )
+                    if not movie_doc:
+                        try:
+                            url = f"{TMDB_BASE_URL}/movie/{tmdb_id}?api_key={TMDB_API_KEY}&language=id-ID"
+                            res = requests.get(url, timeout=4)
+                            if res.status_code == 200:
+                                tmdb_data = res.json()
+                                movie_doc = {
+                                    "title": tmdb_data.get("title"),
+                                    "genres": " | ".join([g["name"] for g in tmdb_data.get("genres", []) if g.get("name")]),
+                                    "poster_path": tmdb_data.get("poster_path")
+                                }
+                        except Exception:
+                            movie_doc = None
+
+            return movie_doc or {}
+
+        # Agregasi untuk menggabungkan data rating dengan metadata film dari collection movies
+        pipeline = [
+            {"$match": {"user_id": user_id}},
+            {"$sort": {"created_at": -1}},
+            {"$limit": limit},
+            {
+                "$lookup": {
+                    "from": "movies",
+                    "let": {"mid": "$movie_id"},
+                    "pipeline": [
+                        { "$expr": { "$eq": [{ "$toString": "$movie_id" }, { "$toString": "$$mid" }] } }
+                    ],
+                    "as": "movie_details"
+                }
+            },
+            {
+                "$project": {
+                    "_id": 1,
+                    "movie_id": 1,
+                    "rating": 1,
+                    "review": 1,
+                    "created_at": 1,
+                    "title": {
+                        "$cond": {
+                            "if": {"$gt": [{"$size": "$movie_details"}, 0]},
+                            "then": {"$arrayElemAt": ["$movie_details.title", 0]},
+                            "else": "Judul Tidak Diketahui"
+                        }
+                    },
+                    "genres": {
+                        "$cond": {
+                            "if": {"$gt": [{"$size": "$movie_details"}, 0]},
+                            "then": {"$arrayElemAt": ["$movie_details.genres", 0]},
+                            "else": ""
+                        }
+                    },
+                    "poster_path": {
+                        "$cond": {
+                            "if": {"$gt": [{"$size": "$movie_details"}, 0]},
+                            "then": {"$arrayElemAt": ["$movie_details.poster_path", 0]},
+                            "else": None
+                        }
+                    }
+                }
+            }
+        ]
         
-    for r in mongo_ratings:
-        combined_dict[r["movieId"]] = r
+        ratings = list(db.ratings.find({"user_id": user_id}).sort("created_at", -1).limit(limit))
+        
+        try:
+            aggregated_ratings = list(ratings_collection.aggregate(pipeline))
+        except Exception:
+            aggregated_ratings = []
+            for r in ratings:
+                r['_id'] = str(r['_id'])
+                if 'created_at' in r and isinstance(r['created_at'], datetime):
+                    r['created_at'] = r['created_at'].isoformat()
+                # Cari manual info film
+                movie_info = resolve_movie_title_and_meta(r.get("movie_id"))
+                if movie_info:
+                    r['title'] = movie_info.get('title', 'Judul Tidak Diketahui')
+                    r['genres'] = movie_info.get('genres', '')
+                    r['poster_path'] = movie_info.get('poster_path', None)
+                else:
+                    r['title'] = r.get('title', 'Judul Tidak Diketahui')
+                aggregated_ratings.append(r)
 
-    all_ratings = sorted(combined_dict.values(), key=lambda x: x["timestamp"], reverse=True)
-    total_ratings = len(all_ratings)
+        for r in aggregated_ratings:
+            r['_id'] = str(r['_id'])
+            if 'created_at' in r and not isinstance(r['created_at'], str):
+                r['created_at'] = r['created_at'].isoformat()
 
-    all_ratings = all_ratings[:limit]
+        total_count = ratings_collection.count_documents({"user_id": user_id})
 
-    return jsonify({
-        "status":  "ok",
-        "user_id": user_id,
-        "total":   total_ratings,
-        "ratings": all_ratings
-    })
+        return jsonify({
+            "status": "ok",
+            "total": total_count,
+            "ratings": aggregated_ratings
+        }), 200
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 # ──  Endpoint Rating  ──────
@@ -1276,6 +1700,7 @@ def toggle_watched():
     data = request.json
     user_id = data.get('user_id')
     movie_id = data.get('movie_id')
+    action = (data.get('action') or 'toggle').lower()
 
     try:
         movie_id = int(movie_id)
@@ -1289,7 +1714,16 @@ def toggle_watched():
     watched_list = user.get('watched_list', [])
     
     # Logika Toggle Watched
-    if movie_id in watched_list:
+    if action == 'add':
+        if movie_id not in watched_list:
+            users_collection.update_one({"user_id": user_id}, {"$push": {"watched_list": movie_id}})
+        message = "Film ditandai sebagai sudah ditonton"
+        is_watched = True
+    elif action == 'remove':
+        users_collection.update_one({"user_id": user_id}, {"$pull": {"watched_list": movie_id}})
+        message = "Film dihapus dari Watched List"
+        is_watched = False
+    elif movie_id in watched_list:
         users_collection.update_one({"user_id": user_id}, {"$pull": {"watched_list": movie_id}})
         message = "Film dihapus dari Watched List"
         is_watched = False
@@ -1328,6 +1762,26 @@ def get_watched_list(user_id):
         for result in results:
             if result:
                 watched_movies.append(result)
+
+    rating_map = {}
+    for item in ratings_collection.find({"user_id": user_id}, {"movie_id": 1, "rating": 1, "review": 1, "created_at": 1}):
+        try:
+            key = int(item.get("movie_id"))
+        except Exception:
+            continue
+        rating_map[key] = {
+            "rating": item.get("rating", 0),
+            "review": item.get("review", ""),
+            "rated_at": item.get("created_at").isoformat() if isinstance(item.get("created_at"), datetime) else item.get("created_at")
+        }
+
+    for movie in watched_movies:
+        try:
+            key = int(movie.get("movie_id") or movie.get("movieId") or movie.get("tmdb_id"))
+        except Exception:
+            continue
+        if key in rating_map:
+            movie.update(rating_map[key])
     
     return jsonify({"status": "ok", "watched_list": watched_movies}), 200
 
@@ -1616,60 +2070,107 @@ def vote_item():
 
 # ── Endpoint Komentar (Reply) ──────────────────────────────────
 
-@app.route('/community/comments/<post_id>', methods=['GET'])
-def get_comments(post_id):
-    try:
-        pipeline = [
-            {"$match": {"$or": [{"post_id": post_id}, {"thread_id": post_id}]}},
-            {"$sort": {"created_at": 1}},
-            {
-                "$lookup": {
-                    "from": "users",
-                    "localField": "user_id",
-                    "foreignField": "user_id",
-                    "as": "author_info"
-                }
-            },
-            {
-                "$project": {
-                    "_id": 0,
-                    "comment_id": 1,
-                    "post_id": {"$ifNull": ["$post_id", "$thread_id"]},
-                    "parent_comment_id": 1,
-                    "user_id": 1,
-                    "content": 1,
-                    "upvotes": 1,
-                    "downvotes": 1,
-                    "likes": 1,
-                    "dislikes": 1,
-                    "created_at": 1,
-                    "updated_at": 1,
-                    "author": {
-                        "$cond": {
-                            "if": {"$gt": [{"$size": "$author_info"}, 0]},
-                            "then": {
-                                "username": {"$arrayElemAt": ["$author_info.username", 0]},
-                                "profile_picture": {"$arrayElemAt": ["$author_info.profile_picture", 0]}
-                            },
-                            "else": {"username": "Anonim", "profile_picture": ""}
+
+@app.route('/community/comments/<post_id>', methods=['GET', 'POST'])
+def handle_comments(post_id):
+    if request.method == 'POST':
+        try:
+            data = request.json
+            user_id = data.get('user_id')
+            content = data.get('content', '').strip()
+            parent_comment_id = data.get('parent_comment_id', None)
+
+            if not user_id or not content:
+                return jsonify({"status": "error", "message": "Data tidak lengkap"}), 400
+
+            # Generate unique comment ID
+            comment_id = str(bson.ObjectId())
+            created_at = datetime.utcnow()
+
+            comment_doc = {
+                "comment_id": comment_id,
+                "post_id": post_id,
+                "parent_comment_id": parent_comment_id,
+                "user_id": int(user_id) if str(user_id).isdigit() else user_id,
+                "content": content,
+                "likes": 0,
+                "dislikes": 0,
+                "created_at": created_at,
+                "updated_at": created_at
+            }
+
+            # 1. Simpan komentar ke database
+            comments_collection.insert_one(comment_doc)
+
+            # 2. Update counter `comments_count` di collection posts/threads secara otomatis
+            posts_collection.update_one(
+                {"$or": [{"post_id": post_id}, {"thread_id": post_id}]},
+                {"$inc": {"comments_count": 1}}
+            )
+
+            # Ambil data profile author untuk di-return ke frontend agar langsung me-render avatar
+            author_info = users_collection.find_one({"user_id": comment_doc["user_id"]}, {"_id": 0, "username": 1, "profile_picture": 1})
+            comment_doc["_id"] = str(comment_doc["_id"])
+            comment_doc["created_at"] = comment_doc["created_at"].isoformat()
+            comment_doc["updated_at"] = comment_doc["updated_at"].isoformat()
+            comment_doc["author"] = author_info if author_info else {"username": "Anonim", "profile_picture": ""}
+
+            return jsonify({"status": "ok", "comment": comment_doc}), 200
+
+        except Exception as e:
+            return jsonify({"status": "error", "message": str(e)}), 500
+
+    else:
+        # ── LOGIKA GET COMMENTS (Kode Awal Kamu) ──
+        try:
+            pipeline = [
+                {"$match": {"$or": [{"post_id": post_id}, {"thread_id": post_id}]}},
+                {"$sort": {"created_at": 1}},
+                {
+                    "$lookup": {
+                        "from": "users",
+                        "localField": "user_id",
+                        "foreignField": "user_id",
+                        "as": "author_info"
+                    }
+                },
+                {
+                    "$project": {
+                        "_id": 0,
+                        "comment_id": 1,
+                        "post_id": {"$ifNull": ["$post_id", "$thread_id"]},
+                        "parent_comment_id": 1,
+                        "user_id": 1,
+                        "content": 1,
+                        "likes": 1,
+                        "dislikes": 1,
+                        "created_at": 1,
+                        "updated_at": 1,
+                        "author": {
+                            "$cond": {
+                                "if": {"$gt": [{"$size": "$author_info"}, 0]},
+                                "then": {
+                                    "username": {"$arrayElemAt": ["$author_info.username", 0]},
+                                    "profile_picture": {"$arrayElemAt": ["$author_info.profile_picture", 0]}
+                                },
+                                "else": {"username": "Anonim", "profile_picture": ""}
+                            }
                         }
                     }
                 }
-            }
-        ]
-        
-        comments = list(comments_collection.aggregate(pipeline))
-        
-        # Konversi datetime -> ISO string agar aman di-parse di frontend
-        for c in comments:
-            if isinstance(c.get('created_at'), datetime):
-                c['created_at'] = c['created_at'].isoformat()
-            if isinstance(c.get('updated_at'), datetime):
-                c['updated_at'] = c['updated_at'].isoformat()
+            ]
             
-        return jsonify({"status": "ok", "comments": comments}), 200
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+            comments = list(comments_collection.aggregate(pipeline))
+            
+            for c in comments:
+                if isinstance(c.get('created_at'), datetime):
+                    c['created_at'] = c['created_at'].isoformat()
+                if isinstance(c.get('updated_at'), datetime):
+                    c['updated_at'] = c['updated_at'].isoformat()
+                
+            return jsonify({"status": "ok", "comments": comments}), 200
+        except Exception as e:
+            return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/community/comments', methods=['POST'])
 def create_comment():
@@ -2107,7 +2608,7 @@ def initialize_conversation():
                 "$set": {
                     "conversation_id": room_id,
                     "participants": [int(sender_id), int(receiver_id)],
-                    "updated_at": datetime.utcnow().isoformat()
+                    "updated_at": datetime.now(ZoneInfo("Asia/Jakarta")).isoformat()
                 },
                 "$setOnInsert": {
                     "last_message": "Memulai percakapan baru...",
@@ -2130,7 +2631,11 @@ def get_conversations(user_id):
             conv['_id'] = str(conv['_id'])
             other_user_id = next((uid for uid in conv['participants'] if uid != user_id), None)
             if other_user_id:
-                other_user = users_collection.find_one({"user_id": other_user_id}, {"_id": 0, "username": 1, "profile_picture": 1})
+                # PERBAIKAN: Tambahkan "user_id": 1 agar ID ikut dikirim ke frontend
+                other_user = users_collection.find_one(
+                    {"user_id": other_user_id}, 
+                    {"_id": 0, "user_id": 1, "username": 1, "profile_picture": 1}
+                )
                 if other_user:
                     conv['other_user'] = other_user
         

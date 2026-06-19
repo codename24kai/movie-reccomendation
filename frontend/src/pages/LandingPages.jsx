@@ -1,64 +1,41 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import AOS from 'aos';
 import 'aos/dist/aos.css';
+import FireflyBackground from '../components/Fireflybackground';
 
-// Import gambar dari src/assets — wajib pakai import (bukan string path biasa)
-// karena file berada di src/, akan diproses bundler (Vite) saat build.
 import heroImage1 from '../assets/landing-page/landing-page-1.jpg';
 import heroImage2 from '../assets/landing-page/landing-page-2.jpg';
 import heroImage3 from '../assets/landing-page/landing-page-3.png';
 
-// ════════════════════════════════════════════════════════════════
-//  CUSTOM COUNT-UP HOOK
-//  Mengganti react-countup — package tersebut sempat menyebabkan
-//  error "Element type is invalid" akibat ketidakcocokan cara
-//  import/export pada environment build tertentu. Implementasi
-//  manual ini lebih aman karena tidak bergantung pada resolusi
-//  module pihak ketiga.
-// ════════════════════════════════════════════════════════════════
+// ── Custom count-up hook ─────────────────────────────────────────
 const useCountUp = (target, { duration = 2000, startOnView = true } = {}) => {
   const [value, setValue] = useState(0);
   const [hasStarted, setHasStarted] = useState(!startOnView);
   const elementRef = useRef(null);
   const frameRef = useRef(null);
 
-  // Mulai animasi saat elemen masuk viewport
   useEffect(() => {
     if (!startOnView || hasStarted) return;
     const node = elementRef.current;
     if (!node) return;
-
     const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setHasStarted(true);
-          observer.disconnect();
-        }
-      },
+      ([entry]) => { if (entry.isIntersecting) { setHasStarted(true); observer.disconnect(); } },
       { threshold: 0.3 }
     );
     observer.observe(node);
     return () => observer.disconnect();
   }, [startOnView, hasStarted]);
 
-  // Jalankan animasi counting
   useEffect(() => {
     if (!hasStarted) return;
     const startTime = performance.now();
-    const startValue = 0;
-
     const tick = (now) => {
       const progress = Math.min((now - startTime) / duration, 1);
-      // ease-out cubic agar terasa natural, melambat di akhir
       const eased = 1 - Math.pow(1 - progress, 3);
-      setValue(Math.round(startValue + (target - startValue) * eased));
-
-      if (progress < 1) {
-        frameRef.current = requestAnimationFrame(tick);
-      }
+      setValue(Math.round(target * eased));
+      if (progress < 1) frameRef.current = requestAnimationFrame(tick);
     };
-
     frameRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frameRef.current);
   }, [hasStarted, target, duration]);
@@ -68,36 +45,15 @@ const useCountUp = (target, { duration = 2000, startOnView = true } = {}) => {
 
 const formatNumber = (num) => num.toLocaleString('id-ID');
 
-// ════════════════════════════════════════════════════════════════
-//  HERO SLIDESHOW DATA
-//  GANTI path di bawah dengan gambar landscape film asli kamu.
-//  Letakkan file di: public/assets/hero/
-// ════════════════════════════════════════════════════════════════
+// ── Hero slides ──────────────────────────────────────────────────
 const HERO_SLIDES = [
-  {
-    image: heroImage1,
-    title: 'Malam ini, temukan film yang terasa dibuat untukmu.',
-    subtitle: 'MovieHub memadukan rekomendasi AI, komunitas aktif, dan koleksi film yang terus bertumbuh.',
-  },
-  {
-    image: heroImage2,
-    title: 'Simpan tontonan, tandai yang sudah selesai, lihat progresmu.',
-    subtitle: 'Kelola watchlist dan watched list dalam satu pengalaman yang elegan dan mudah dipakai.',
-  },
-  {
-    image: heroImage3,
-    title: 'Diskusi film yang hidup, review yang jujur, voting yang seru.',
-    subtitle: 'Bersama komunitas, setiap film bisa punya percakapan yang lebih dalam.',
-  },
+  { image: heroImage1, title: 'Malam ini, temukan film yang terasa dibuat untukmu.', subtitle: 'MovieHub memadukan rekomendasi AI, komunitas aktif, dan koleksi film yang terus bertumbuh.' },
+  { image: heroImage2, title: 'Simpan tontonan, tandai yang sudah selesai, lihat progresmu.', subtitle: 'Kelola watchlist dan watched list dalam satu pengalaman yang elegan dan mudah dipakai.' },
+  { image: heroImage3, title: 'Diskusi film yang hidup, review yang jujur, voting yang seru.', subtitle: 'Bersama komunitas, setiap film bisa punya percakapan yang lebih dalam.' },
 ];
+const SLIDE_DURATION = 4000;
 
-const SLIDE_DURATION = 2000; // 2 detik, sesuai spesifikasi
-
-// ════════════════════════════════════════════════════════════════
-//  POSTER COLLAGE — STATIS, TIDAK FETCH DARI BACKEND
-//  Tambah/kurangi poster cukup edit array ini, tanpa ubah struktur.
-//  Letakkan file di: public/assets/posters/
-// ════════════════════════════════════════════════════════════════
+// ── Poster collage ───────────────────────────────────────────────
 const POSTERS = [
   { title: 'Interstellar', src: '/assets/posters/poster1.jpg' },
   { title: 'Dune', src: '/assets/posters/poster2.jpg' },
@@ -110,98 +66,199 @@ const POSTERS = [
   { title: 'La La Land', src: '/assets/posters/poster9.jpg' },
 ];
 
-// Fallback kalau file poster belum diisi — tampil sebagai placeholder rapi
-// daripada broken image icon.
+// ── Stats ────────────────────────────────────────────────────────
+const STATS_FALLBACK = { total_movies: 10000, total_users: 1200, total_ratings: 8500, total_reviews: 2100, total_threads: 640 };
+const STAT_CONFIG = [
+  { key: 'total_movies', label: 'Koleksi Film', suffix: '+', icon: 'fa-film', color: 'from-indigo-500/20 to-indigo-500/5', iconColor: 'text-indigo-300', border: 'border-indigo-500/15' },
+  { key: 'total_users', label: 'Pengguna', suffix: '+', icon: 'fa-users', color: 'from-pink-500/20 to-pink-500/5', iconColor: 'text-pink-300', border: 'border-pink-500/15' },
+  { key: 'total_ratings', label: 'Total Rating', suffix: '+', icon: 'fa-star', color: 'from-amber-500/20 to-amber-500/5', iconColor: 'text-amber-300', border: 'border-amber-500/15' },
+  { key: 'total_reviews', label: 'Total Review', suffix: '+', icon: 'fa-pen', color: 'from-emerald-500/20 to-emerald-500/5', iconColor: 'text-emerald-300', border: 'border-emerald-500/15' },
+  { key: 'total_threads', label: 'Total Diskusi', suffix: '+', icon: 'fa-comments', color: 'from-violet-500/20 to-violet-500/5', iconColor: 'text-violet-300', border: 'border-violet-500/15' },
+];
+
+// ── PosterTile dengan fallback ───────────────────────────────────
 const PosterTile = ({ poster }) => {
   const [failed, setFailed] = useState(false);
-
   return (
     <div className="relative aspect-[2/3] overflow-hidden rounded-2xl border border-white/10 shadow-xl shadow-black/30 bg-[#10101c]">
       {!failed ? (
-        <img
-          src={poster.src}
-          alt={poster.title}
-          onError={() => setFailed(true)}
-          className="h-full w-full object-cover transition-transform duration-500 hover:scale-105"
-          loading="lazy"
-        />
+        <img src={poster.src} alt={poster.title} onError={() => setFailed(true)}
+          className="h-full w-full object-cover transition-transform duration-500 hover:scale-105" loading="lazy" />
       ) : (
         <div className="flex h-full flex-col items-center justify-center gap-2 px-3 text-center">
           <i className="fas fa-film text-2xl text-white/15" />
           <p className="text-[11px] font-semibold text-white/30">{poster.title}</p>
-          <p className="text-[9px] uppercase tracking-[0.2em] text-white/15">Poster belum diisi</p>
         </div>
       )}
     </div>
   );
 };
 
-// ════════════════════════════════════════════════════════════════
-//  STATISTIK — fetch dari backend, fallback ke nilai default
-//  kalau endpoint belum tersedia / gagal.
-// ════════════════════════════════════════════════════════════════
-const STATS_FALLBACK = {
-  total_movies: 10000,
-  total_users: 1200,
-  total_ratings: 8500,
-  total_reviews: 2100,
-  total_threads: 640,
-};
-
-const STAT_CONFIG = [
-  { key: 'total_movies', label: 'Total Koleksi Film', suffix: '+' },
-  { key: 'total_users', label: 'Total Pengguna', suffix: '+' },
-  { key: 'total_ratings', label: 'Total Rating', suffix: '+' },
-  { key: 'total_reviews', label: 'Total Review', suffix: '+' },
-  { key: 'total_threads', label: 'Total Diskusi', suffix: '+' },
-];
-
-// Kartu statistik dengan count-up animation, dipicu saat masuk viewport
-const StatCard = ({ target, label, suffix, delay }) => {
+// ── StatCard ─────────────────────────────────────────────────────
+const StatCard = ({ target, label, suffix, delay, icon, color, iconColor, border }) => {
   const { value, elementRef } = useCountUp(target, { duration: 1800 });
-
   return (
-    <div
-      ref={elementRef}
-      data-aos="fade-up"
-      data-aos-delay={delay}
-      className="rounded-[1.5rem] border border-white/10 bg-black/30 p-5 text-center"
-    >
-      <p className="text-3xl font-black text-white">
-        {formatNumber(value)}{suffix}
-      </p>
+    <div ref={elementRef} data-aos="fade-up" data-aos-delay={delay}
+      className={`rounded-[1.5rem] border ${border} bg-gradient-to-b ${color} p-5 text-center backdrop-blur-sm relative overflow-hidden`}>
+      <div className={`absolute top-3 right-3 ${iconColor} opacity-20 text-2xl`}>
+        <i className={`fas ${icon}`} />
+      </div>
+      <i className={`fas ${icon} ${iconColor} text-2xl mb-3 block`} />
+      <p className="text-3xl font-black text-white">{formatNumber(value)}{suffix}</p>
       <p className="mt-2 text-xs uppercase tracking-[0.25em] text-white/40">{label}</p>
     </div>
   );
 };
 
-const SectionShell = ({ children, gradient, reverse = false, aosDelay = 0 }) => (
-  <section
-    data-aos="fade-up"
-    data-aos-delay={aosDelay}
-    className={`relative overflow-hidden rounded-[2rem] border border-white/10 bg-gradient-to-br ${gradient} p-6 md:p-10`}
-  >
-    <div className={`grid gap-10 items-center ${reverse ? 'lg:grid-cols-[0.9fr_1.1fr]' : 'lg:grid-cols-[1.1fr_0.9fr]'}`}>
-      {children}
+// ── Cinematic background: kolom poster mengambang ────────────────
+const CinematicBackground = () => {
+  // Warna gradient film — dipakai sebagai "poster placeholder" yang bergerak
+  const FILM_COLORS = [
+    'from-indigo-600/40 to-slate-900', 'from-amber-600/40 to-slate-900',
+    'from-rose-600/40 to-slate-900', 'from-emerald-600/40 to-slate-900',
+    'from-violet-600/40 to-slate-900', 'from-cyan-600/40 to-slate-900',
+    'from-orange-600/40 to-slate-900', 'from-pink-600/40 to-slate-900',
+    'from-teal-600/40 to-slate-900', 'from-blue-600/40 to-slate-900',
+    'from-red-600/40 to-slate-900', 'from-purple-600/40 to-slate-900',
+    'from-yellow-600/40 to-slate-900', 'from-sky-600/40 to-slate-900',
+    'from-lime-600/40 to-slate-900', 'from-fuchsia-600/40 to-slate-900',
+  ];
+
+  // 6 kolom, tiap kolom arah bergantian (atas/bawah), kecepatan berbeda
+  const columns = useMemo(() => [
+    { dir: 'up', duration: 28, offset: 0, count: 6 },
+    { dir: 'down', duration: 22, offset: -40, count: 7 },
+    { dir: 'up', duration: 35, offset: -15, count: 6 },
+    { dir: 'down', duration: 25, offset: -55, count: 7 },
+    { dir: 'up', duration: 30, offset: -25, count: 6 },
+    { dir: 'down', duration: 20, offset: -10, count: 7 },
+  ], []);
+
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none fixed inset-0 -z-20 overflow-hidden"
+    >
+      <style>{`
+        @keyframes scroll-up {
+          from { transform: translateY(0); }
+          to   { transform: translateY(-50%); }
+        }
+        @keyframes scroll-down {
+          from { transform: translateY(-50%); }
+          to   { transform: translateY(0); }
+        }
+      `}</style>
+
+      {/* Overlay gelap kuat supaya poster tidak terlalu dominan */}
+      <div className="absolute inset-0 bg-[#080810]/82 z-10" />
+
+      {/* Grid kolom poster */}
+      <div className="absolute inset-0 grid gap-2 opacity-50"
+        style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>
+        {columns.map((col, ci) => {
+          const animName = col.dir === 'up' ? 'scroll-up' : 'scroll-down';
+          return (
+            <div
+              key={ci}
+              className="flex flex-col gap-2"
+              style={{ marginTop: `${col.offset}px` }}
+            >
+              {/* Duplikasi 2x untuk seamless loop */}
+              {[0, 1].map((dup) => (
+                <div
+                  key={dup}
+                  className="flex flex-col gap-2"
+                  style={{
+                    animation: `${animName} ${col.duration}s linear infinite`,
+                  }}
+                >
+                  {Array.from({ length: col.count }).map((_, ri) => {
+                    const colorIdx = (ci * 3 + ri * 2 + dup) % FILM_COLORS.length;
+                    return (
+                      <div
+                        key={ri}
+                        className={`shrink-0 rounded-lg border border-white/[0.06] bg-gradient-to-b ${FILM_COLORS[colorIdx]}`}
+                        style={{ aspectRatio: '2/3', width: '100%' }}
+                      />
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
     </div>
-  </section>
+  );
+};
+
+// ── Section wrapper dengan dekorasi berbeda per section ──────────
+const SectionShell = ({ children, gradient, reverse = false, aosDelay = 0, accentColor = 'indigo', glowPos = 'top-right' }) => {
+  const glowMap = {
+    'top-right': 'top-0 right-0 translate-x-1/2 -translate-y-1/2',
+    'bottom-left': 'bottom-0 left-0 -translate-x-1/2 translate-y-1/2',
+    'top-left': 'top-0 left-0 -translate-x-1/2 -translate-y-1/2',
+    'bottom-right': 'bottom-0 right-0 translate-x-1/2 translate-y-1/2',
+  };
+  const glowColorMap = {
+    indigo: 'bg-indigo-500/20',
+    pink: 'bg-pink-500/20',
+    violet: 'bg-violet-500/20',
+  };
+
+  return (
+    <section
+      data-aos="fade-up"
+      data-aos-delay={aosDelay}
+      className={`relative overflow-hidden rounded-[2rem] border border-white/10 bg-gradient-to-br ${gradient} p-6 md:p-10 backdrop-blur-sm`}
+    >
+      {/* Glow dekoratif di sudut section */}
+      <div className={`absolute ${glowMap[glowPos]} w-64 h-64 rounded-full blur-3xl pointer-events-none ${glowColorMap[accentColor] ?? 'bg-indigo-500/20'}`} />
+      {/* Garis aksen atas tipis */}
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+
+      <div className={`relative z-10 grid gap-10 items-center ${reverse ? 'lg:grid-cols-[0.9fr_1.1fr]' : 'lg:grid-cols-[1.1fr_0.9fr]'}`}>
+        {children}
+      </div>
+    </section>
+  );
+};
+
+// ── Placeholder ilustrasi dengan orb glow ───────────────────────
+const IllustrationPlaceholder = ({ icon, color, label, glowColor }) => (
+  <div className="relative flex h-72 w-full max-w-md items-center justify-center rounded-[2rem] border border-white/[0.08] bg-black/20 mx-auto overflow-hidden">
+    {/* Lingkaran glow di tengah */}
+    <div className={`absolute inset-0 flex items-center justify-center`}>
+      <div className={`h-40 w-40 rounded-full blur-3xl ${glowColor} opacity-40`} />
+    </div>
+    {/* Ring dekoratif */}
+    <div className="absolute inset-4 rounded-[1.5rem] border border-white/[0.05]" />
+    <div className="absolute inset-8 rounded-[1.25rem] border border-white/[0.03]" />
+    {/* Konten tengah */}
+    <div className="relative text-center px-6 z-10">
+      <i className={`fas ${icon} text-5xl ${color} mb-4 block`} />
+      <p className="text-xs text-white/30 font-medium">{label}</p>
+    </div>
+    {/* Dots dekoratif sudut */}
+    {['-top-1 -left-1', '-top-1 -right-1', '-bottom-1 -left-1', '-bottom-1 -right-1'].map((pos) => (
+      <div key={pos} className={`absolute ${pos} w-6 h-6 rounded-full border border-white/[0.08] bg-white/[0.02]`} />
+    ))}
+  </div>
 );
 
+// ════════════════════════════════════════════════════════════════
+//  MAIN COMPONENT
+// ════════════════════════════════════════════════════════════════
 const LandingPages = () => {
   const [activeSlide, setActiveSlide] = useState(0);
   const [stats, setStats] = useState(STATS_FALLBACK);
   const slideTimerRef = useRef(null);
 
-  // ── Inisialisasi AOS sekali saat mount ──────────────────────────
   useEffect(() => {
-    AOS.init({
-      duration: 700,
-      once: true,
-      easing: 'ease-out-cubic',
-    });
+    AOS.init({ duration: 700, once: true, easing: 'ease-out-cubic' });
   }, []);
 
-  // ── Hero carousel: ganti slide tiap 2 detik ─────────────────────
   useEffect(() => {
     slideTimerRef.current = setInterval(() => {
       setActiveSlide((prev) => (prev + 1) % HERO_SLIDES.length);
@@ -209,20 +266,13 @@ const LandingPages = () => {
     return () => clearInterval(slideTimerRef.current);
   }, []);
 
-  // ── Fetch statistik real dari backend ───────────────────────────
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        // Endpoint ini perlu ditambahkan di backend (app.py) kalau belum ada:
-        // GET /stats → { status: 'ok', total_movies, total_users, total_ratings, total_reviews, total_threads }
         const res = await fetch('http://127.0.0.1:5000/stats');
         const data = await res.json();
-        if (data.status === 'ok') {
-          setStats((prev) => ({ ...prev, ...data }));
-        }
+        if (data.status === 'ok') setStats((prev) => ({ ...prev, ...data }));
       } catch (err) {
-        // Diam-diam pakai fallback — landing page tidak boleh terlihat rusak
-        // hanya karena endpoint statistik belum siap.
         console.warn('Gagal memuat statistik real, memakai data fallback:', err);
       }
     };
@@ -230,78 +280,69 @@ const LandingPages = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#080810] text-white">
+    <div className="relative isolate min-h-screen bg-[#080810] text-white">
+      {/* ── Live backgrounds ── */}
+      <CinematicBackground />
+      <FireflyBackground />
+
       <style>{`
         @keyframes kenburns {
           0%   { transform: scale(1) translate(0, 0); }
           100% { transform: scale(1.12) translate(-1%, -1%); }
         }
-        .hero-slide-image {
-          animation: kenburns 7s ease-out forwards;
-        }
+        .hero-slide-image { animation: kenburns 7s ease-out forwards; }
       `}</style>
 
       {/* ── Navbar ── */}
-      <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-[#080810]/90 backdrop-blur-xl">
+      <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-[#080810]/75 backdrop-blur-2xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 md:px-10">
-          <div>
-            <p className="text-xs uppercase tracking-[0.35em] text-indigo-300">MovieHub</p>
-            <p className="text-sm text-white/40">AI movie discovery platform</p>
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-base shrink-0">
+              🎬
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-[0.35em] text-indigo-300 leading-none">MovieHub</p>
+              <p className="text-[11px] text-white/35 leading-tight">AI movie discovery platform</p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
-            <Link to="/login" className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white/80 hover:bg-white/[0.08]">
+            <Link to="/login" className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white/80 hover:bg-white/[0.08] transition-colors">
               Masuk
             </Link>
-            <Link to="/register" className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500">
-              Daftar
+            <Link to="/register" className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-500/20">
+              Daftar Gratis
             </Link>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-6 py-8 md:px-10 md:py-10 space-y-8 md:space-y-10">
+      <main className="relative z-10 mx-auto max-w-7xl px-6 py-8 md:px-10 md:py-10 space-y-8 md:space-y-10">
 
-        {/* ══════════════════ SECTION 1 — HERO SLIDESHOW ══════════════════ */}
-        <section className="relative overflow-hidden rounded-[2.25rem] border border-white/10">
-          <div className="relative h-[560px] md:h-[620px]">
+        {/* ══ HERO SLIDESHOW ══════════════════════════════════════════ */}
+        <section className="relative overflow-hidden rounded-[2.25rem] border border-white/[0.08] shadow-2xl shadow-black/50">
+          <div className="relative h-[580px] md:h-[640px]">
             {HERO_SLIDES.map((slide, index) => (
               <div
                 key={slide.title}
-                className={`absolute inset-0 transition-opacity duration-1000 ${index === activeSlide ? 'opacity-100 z-10' : 'opacity-0 z-0'
-                  }`}
+                className={`absolute inset-0 transition-opacity duration-1000 ${index === activeSlide ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
               >
-                {/* Background image dengan Ken Burns effect — hanya animasi saat slide aktif */}
                 <div
                   className={`absolute inset-0 bg-cover bg-center ${index === activeSlide ? 'hero-slide-image' : ''}`}
                   style={{ backgroundImage: `url(${slide.image})`, backgroundColor: '#10101c' }}
                 />
-                {/* Overlay gelap agar teks tetap terbaca */}
-                <div className="absolute inset-0 bg-gradient-to-t from-[#080810] via-[#080810]/55 to-[#080810]/20" />
-                <div className="absolute inset-0 bg-gradient-to-r from-[#080810]/70 via-transparent to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#080810] via-[#080810]/60 to-[#080810]/15" />
+                <div className="absolute inset-0 bg-gradient-to-r from-[#080810]/75 via-[#080810]/30 to-transparent" />
               </div>
             ))}
 
-            {/*
-              FIX: Konten teks sekarang STATIS — tidak lagi mengikuti slide
-              gambar yang berganti otomatis di background. Sebelumnya pakai
-              key={activeSlide} yang membuat React membongkar-pasang ulang
-              elemen ini setiap 2 detik, sehingga AOS ikut re-trigger animasi
-              fade-up berulang kali. Sekarang key dihapus sepenuhnya, jadi
-              data-aos hanya jalan SEKALI saat halaman pertama dimuat/refresh
-              (sesuai cara kerja default AOS dengan once: true), lalu teks
-              diam di tempat selama slide gambar berganti di belakangnya.
-
-              Teks yang ditampilkan diambil dari HERO_SLIDES[0] secara
-              permanen (judul utama landing page), bukan ikut index slide
-              aktif lagi — karena teks tidak lagi disinkronkan ke slide.
-            */}
-            <div className="relative z-20 flex h-full flex-col justify-center px-6 md:px-12 max-w-3xl">
+            {/* Teks STATIS — AOS hanya jalan sekali saat mount */}
+            <div className="relative z-20 flex h-full flex-col justify-center px-6 md:px-14 max-w-3xl">
               <div
                 data-aos="fade-up"
-                className="inline-flex items-center gap-2 self-start rounded-full border border-indigo-400/20 bg-indigo-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200 mb-6"
+                className="inline-flex items-center gap-2 self-start rounded-full border border-indigo-400/25 bg-indigo-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200 mb-6 backdrop-blur-sm"
               >
-                <i className="fas fa-film" />
-                MovieHub
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
+                MovieHub · AI Powered
               </div>
               <h1
                 data-aos="fade-up"
@@ -317,174 +358,184 @@ const LandingPages = () => {
               >
                 {HERO_SLIDES[0].subtitle}
               </p>
-
-              <div
-                data-aos="fade-up"
-                data-aos-delay="300"
-                className="flex flex-wrap gap-3"
-              >
-                <Link to="/login" className="inline-flex items-center gap-2 rounded-2xl bg-white px-6 py-3 text-sm font-black text-black transition-transform hover:-translate-y-0.5">
-                  Mulai Jelajahi Film
-                  <i className="fas fa-arrow-right" />
+              <div data-aos="fade-up" data-aos-delay="300" className="flex flex-wrap gap-3">
+                <Link to="/login" className="inline-flex items-center gap-2 rounded-2xl bg-white px-6 py-3 text-sm font-black text-black transition-all hover:-translate-y-0.5 hover:shadow-lg">
+                  Mulai Jelajahi Film <i className="fas fa-arrow-right" />
                 </Link>
-                <Link to="/register" className="inline-flex items-center gap-2 rounded-2xl border border-white/15 bg-white/[0.06] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/[0.1]">
-                  Bergabung Sekarang
-                  <i className="fas fa-user-plus" />
+                <Link to="/register" className="inline-flex items-center gap-2 rounded-2xl border border-white/15 bg-white/[0.06] px-6 py-3 text-sm font-semibold text-white transition-all hover:bg-white/[0.1] backdrop-blur-sm">
+                  Bergabung Sekarang <i className="fas fa-user-plus" />
                 </Link>
               </div>
             </div>
 
-            {/* FIX: dot indicators dihapus — slide hanya berganti otomatis
-                tanpa kontrol manual, sesuai permintaan. */}
+            {/* Progress bar slide bawah */}
+            <div className="absolute bottom-0 left-0 right-0 z-20 h-[2px] bg-white/[0.06]">
+              <div
+                className="h-full bg-indigo-400/60 transition-none"
+                style={{
+                  width: `${((activeSlide + 1) / HERO_SLIDES.length) * 100}%`,
+                  transition: `width ${SLIDE_DURATION}ms linear`,
+                }}
+              />
+            </div>
           </div>
         </section>
 
-        {/* ══════════════════ SECTION 2 — WATCHLIST & WATCHED LIST (zigzag normal) ══════════════════ */}
-        <SectionShell gradient="from-indigo-500/10 via-slate-950 to-transparent">
-          <div className="space-y-4" data-aos="fade-right">
-            <p className="text-xs font-bold uppercase tracking-[0.35em] text-indigo-300">Watchlist & Watched List</p>
+        {/* ══ WATCHLIST & WATCHED LIST ════════════════════════════════ */}
+        <SectionShell gradient="from-indigo-950/60 via-[#080810]/90 to-[#080810]/80" accentColor="indigo" glowPos="top-right">
+          <div className="space-y-5" data-aos="fade-right">
+            <div className="inline-flex items-center gap-2 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.25em] text-indigo-300">
+              <i className="fas fa-bookmark text-[10px]" /> Watchlist & Watched List
+            </div>
             <h2 className="text-3xl font-black leading-tight md:text-4xl">Simpan tontonan dan lacak progres menontonmu.</h2>
-            <p className="max-w-xl text-base leading-7 text-white/65">
+            <p className="max-w-xl text-base leading-7 text-white/60">
               Atur film yang ingin ditonton, tandai yang sudah selesai, dan nikmati pengalaman koleksi film yang terasa personal.
             </p>
-            <ul className="space-y-3 text-sm text-white/70">
-              <li className="flex items-center gap-3"><i className="fas fa-check text-emerald-400" /> Menyimpan film untuk nanti ditonton</li>
-              <li className="flex items-center gap-3"><i className="fas fa-check text-emerald-400" /> Menandai film yang sudah selesai</li>
-              <li className="flex items-center gap-3"><i className="fas fa-check text-emerald-400" /> Melacak progres menonton pengguna</li>
+            <ul className="space-y-3 text-sm">
+              {['Menyimpan film untuk nanti ditonton', 'Menandai film yang sudah selesai', 'Melacak progres menonton pengguna'].map((item) => (
+                <li key={item} className="flex items-center gap-3 text-white/70">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-500/20 border border-indigo-500/30">
+                    <i className="fas fa-check text-indigo-400 text-[9px]" />
+                  </span>
+                  {item}
+                </li>
+              ))}
             </ul>
-            <Link to="/register" className="inline-flex w-fit items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-black">
-              Coba Fitur Ini
+            <Link to="/register" className="inline-flex w-fit items-center gap-2 rounded-2xl bg-indigo-600 hover:bg-indigo-500 px-5 py-3 text-sm font-black text-white transition-all hover:-translate-y-0.5 shadow-lg shadow-indigo-500/20">
+              Coba Fitur Ini <i className="fas fa-arrow-right text-xs" />
             </Link>
           </div>
-
-          {/* Placeholder ilustrasi besar — ganti dengan ilustrasi/icon asli nanti */}
           <div className="flex justify-center" data-aos="fade-left" data-aos-delay="150">
-            <div className="flex h-72 w-full max-w-md items-center justify-center rounded-[2rem] border border-dashed border-white/15 bg-black/20">
-              <div className="text-center px-6">
-                <i className="fas fa-bookmark text-4xl text-indigo-300/50 mb-3" />
-                <p className="text-sm text-white/30">Placeholder ilustrasi Watchlist</p>
-              </div>
-            </div>
+            <IllustrationPlaceholder icon="fa-bookmark" color="text-indigo-300/60" label=" Watchlist" glowColor="bg-indigo-500" />
           </div>
         </SectionShell>
 
-        {/* ══════════════════ SECTION 3 — COMMUNITY DISCUSSION (zigzag terbalik) ══════════════════ */}
-        <SectionShell gradient="from-pink-500/10 via-slate-950 to-transparent" reverse>
-          {/* Visual di KIRI sesuai spesifikasi */}
+        {/* ══ COMMUNITY DISCUSSION ════════════════════════════════════ */}
+        <SectionShell gradient="from-pink-950/50 via-[#080810]/90 to-[#080810]/80" reverse accentColor="pink" glowPos="bottom-left">
           <div className="order-2 lg:order-1 flex justify-center" data-aos="fade-right">
-            <div className="flex h-72 w-full max-w-md items-center justify-center rounded-[2rem] border border-dashed border-white/15 bg-black/20">
-              <div className="text-center px-6">
-                <i className="fas fa-comments text-4xl text-pink-300/50 mb-3" />
-                <p className="text-sm text-white/30">Placeholder ilustrasi Community</p>
-              </div>
-            </div>
+            <IllustrationPlaceholder icon="fa-comments" color="text-pink-300/60" label=" Community" glowColor="bg-pink-500" />
           </div>
-
-          {/* Teks di KANAN sesuai spesifikasi */}
-          <div className="order-1 space-y-4 lg:order-2" data-aos="fade-left" data-aos-delay="150">
-            <p className="text-xs font-bold uppercase tracking-[0.35em] text-pink-300">Community Discussion</p>
+          <div className="order-1 space-y-5 lg:order-2" data-aos="fade-left" data-aos-delay="150">
+            <div className="inline-flex items-center gap-2 rounded-full border border-pink-500/20 bg-pink-500/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.25em] text-pink-300">
+              <i className="fas fa-users text-[10px]" /> Community Discussion
+            </div>
             <h2 className="text-3xl font-black leading-tight md:text-4xl">Ngobrol film bareng komunitas yang aktif dan hangat.</h2>
-            <p className="max-w-xl text-base leading-7 text-white/65">
+            <p className="max-w-xl text-base leading-7 text-white/60">
               Bahas teori, tinggalkan review, balas komentar, dan ikut voting film favoritmu bersama pengguna lain.
             </p>
-            <ul className="space-y-3 text-sm text-white/70">
-              <li className="flex items-center gap-3"><i className="fas fa-check text-emerald-400" /> Diskusi film bersama pengguna lain</li>
-              <li className="flex items-center gap-3"><i className="fas fa-check text-emerald-400" /> Membuat review</li>
-              <li className="flex items-center gap-3"><i className="fas fa-check text-emerald-400" /> Memberikan komentar dan voting polling</li>
+            <ul className="space-y-3 text-sm">
+              {['Diskusi film bersama pengguna lain', 'Membuat review dengan mention film', 'Memberikan komentar dan voting polling'].map((item) => (
+                <li key={item} className="flex items-center gap-3 text-white/70">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-pink-500/20 border border-pink-500/30">
+                    <i className="fas fa-check text-pink-400 text-[9px]" />
+                  </span>
+                  {item}
+                </li>
+              ))}
             </ul>
-            <Link to="/register" className="inline-flex w-fit items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-black">
-              Gabung Komunitas
+            <Link to="/register" className="inline-flex w-fit items-center gap-2 rounded-2xl bg-pink-600 hover:bg-pink-500 px-5 py-3 text-sm font-black text-white transition-all hover:-translate-y-0.5 shadow-lg shadow-pink-500/20">
+              Gabung Komunitas <i className="fas fa-arrow-right text-xs" />
             </Link>
           </div>
         </SectionShell>
 
-        {/* ══════════════════ SECTION 4 — AI RECOMMENDATION (zigzag normal) ══════════════════ */}
-        <SectionShell gradient="from-violet-500/10 via-slate-950 to-transparent">
-          <div className="space-y-4" data-aos="fade-right">
-            <p className="text-xs font-bold uppercase tracking-[0.35em] text-violet-300">AI Recommendation System</p>
+        {/* ══ AI RECOMMENDATION ══════════════════════════════════════ */}
+        <SectionShell gradient="from-violet-950/50 via-[#080810]/90 to-[#080810]/80" accentColor="violet" glowPos="top-left">
+          <div className="space-y-5" data-aos="fade-right">
+            <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-500/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.25em] text-violet-300">
+              <i className="fas fa-robot text-[10px]" /> AI Recommendation System
+            </div>
             <h2 className="text-3xl font-black leading-tight md:text-4xl">Rekomendasi hybrid yang belajar dari seleramu.</h2>
-            <p className="max-w-xl text-base leading-7 text-white/65">
+            <p className="max-w-xl text-base leading-7 text-white/60">
               Sistem ini menggabungkan Matrix Factorization dan Random Forest untuk memberi saran film yang lebih akurat dan relevan dari waktu ke waktu.
             </p>
-            <ul className="space-y-3 text-sm text-white/70">
-              <li className="flex items-center gap-3"><i className="fas fa-check text-emerald-400" /> Rekomendasi berdasarkan histori rating</li>
-              <li className="flex items-center gap-3"><i className="fas fa-check text-emerald-400" /> Rekomendasi berdasarkan preferensi pengguna lain</li>
-              <li className="flex items-center gap-3"><i className="fas fa-check text-emerald-400" /> Hybrid: Matrix Factorization + Random Forest</li>
-            </ul>
-            <Link to="/register" className="inline-flex w-fit items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-black">
-              Mulai Personalisasi
-            </Link>
-          </div>
-
-          <div className="flex justify-center" data-aos="fade-left" data-aos-delay="150">
-            <div className="flex h-72 w-full max-w-md items-center justify-center rounded-[2rem] border border-dashed border-white/15 bg-black/20">
-              <div className="text-center px-6">
-                <i className="fas fa-robot text-4xl text-violet-300/50 mb-3" />
-                <p className="text-sm text-white/30">Placeholder ilustrasi AI Recommendation</p>
+            <div className="grid grid-cols-2 gap-3 max-w-sm">
+              <div className="rounded-xl border border-violet-500/15 bg-violet-500/[0.07] px-4 py-3 text-center">
+                <i className="fas fa-layer-group text-violet-300 text-lg mb-2 block" />
+                <p className="text-[11px] font-bold text-violet-200">Matrix Factorization</p>
+                <p className="text-[10px] text-white/30 mt-0.5">User taste</p>
+              </div>
+              <div className="rounded-xl border border-indigo-500/15 bg-indigo-500/[0.07] px-4 py-3 text-center">
+                <i className="fas fa-chart-line text-indigo-300 text-lg mb-2 block" />
+                <p className="text-[11px] font-bold text-indigo-200">Random Forest</p>
+                <p className="text-[10px] text-white/30 mt-0.5">Context score</p>
               </div>
             </div>
+            <Link to="/register" className="inline-flex w-fit items-center gap-2 rounded-2xl bg-violet-600 hover:bg-violet-500 px-5 py-3 text-sm font-black text-white transition-all hover:-translate-y-0.5 shadow-lg shadow-violet-500/20">
+              Mulai Personalisasi <i className="fas fa-arrow-right text-xs" />
+            </Link>
+          </div>
+          <div className="flex justify-center" data-aos="fade-left" data-aos-delay="150">
+            <IllustrationPlaceholder icon="fa-robot" color="text-violet-300/60" label=" AI Recommendation" glowColor="bg-violet-500" />
           </div>
         </SectionShell>
 
-        {/* ══════════════════ SECTION 5 — STATISTIK (center, full width, count-up) ══════════════════ */}
-        <section
-          data-aos="fade-up"
-          className="rounded-[2rem] border border-white/10 bg-white/[0.03] px-6 py-10 md:px-10"
-        >
-          <div className="text-center">
-            <p className="text-xs font-bold uppercase tracking-[0.35em] text-amber-300">MovieHub Statistics</p>
-            <h2 className="mt-3 text-3xl font-black md:text-5xl">Skala platform yang menunjukkan kredibilitas.</h2>
-            <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-white/65">
+        {/* ══ STATISTIK ═══════════════════════════════════════════════ */}
+        <section data-aos="fade-up" className="relative overflow-hidden rounded-[2rem] border border-white/[0.07] bg-[#080810]/60 px-6 py-10 md:px-10 backdrop-blur-md">
+          {/* Dekorasi glow lebar di belakang statistik */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-40 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none" />
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+          <div className="relative text-center mb-8">
+            <span className="inline-block text-xs font-bold uppercase tracking-[0.35em] text-amber-300 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-full mb-4">
+              MovieHub Statistics
+            </span>
+            <h2 className="text-3xl font-black md:text-5xl">Skala platform yang menunjukkan kredibilitas.</h2>
+            <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-white/55">
               Data berikut diambil langsung dari database MovieHub.
             </p>
           </div>
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="relative grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             {STAT_CONFIG.map((stat, i) => (
-              <StatCard
-                key={stat.key}
-                target={stats[stat.key] ?? 0}
-                label={stat.label}
-                suffix={stat.suffix}
-                delay={i * 100}
-              />
+              <StatCard key={stat.key} target={stats[stat.key] ?? 0} label={stat.label}
+                suffix={stat.suffix} delay={i * 100} icon={stat.icon}
+                color={stat.color} iconColor={stat.iconColor} border={stat.border} />
             ))}
           </div>
         </section>
 
-        {/* ══════════════════ MOVIE POSTER COLLAGE (statis, tanpa fetch) ══════════════════ */}
-        <section data-aos="fade-up" className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-6 md:p-10">
+        {/* ══ POSTER COLLAGE ══════════════════════════════════════════ */}
+        <section data-aos="fade-up" className="relative overflow-hidden rounded-[2rem] border border-white/[0.07] bg-[#080810]/50 p-6 md:p-10 backdrop-blur-sm">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
           <div className="mb-6 flex items-end justify-between gap-4">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.35em] text-white/35">Poster Collage</p>
+              <span className="text-xs font-bold uppercase tracking-[0.35em] text-white/30">Poster Collage</span>
               <h2 className="mt-2 text-2xl font-black md:text-3xl">Koleksi film yang terus bertumbuh.</h2>
             </div>
-            <Link to="/register" className="text-sm font-semibold text-indigo-300 hover:text-indigo-200 whitespace-nowrap">
-              Jelajahi semua film
+            <Link to="/register" className="text-sm font-semibold text-indigo-300 hover:text-indigo-200 whitespace-nowrap transition-colors flex items-center gap-1">
+              Jelajahi semua <i className="fas fa-arrow-right text-xs" />
             </Link>
           </div>
           <div className="grid grid-cols-3 gap-3 md:grid-cols-4 lg:grid-cols-5 md:gap-4">
-            {POSTERS.map((poster) => (
-              <PosterTile key={poster.title} poster={poster} />
-            ))}
+            {POSTERS.map((poster) => <PosterTile key={poster.title} poster={poster} />)}
           </div>
         </section>
 
-        {/* ══════════════════ CTA PENUTUP ══════════════════ */}
-        <section
-          data-aos="zoom-in"
-          className="rounded-[2rem] border border-white/10 bg-gradient-to-br from-indigo-500/15 via-white/[0.03] to-transparent px-6 py-12 text-center md:px-10"
-        >
-          <h2 className="text-4xl font-black md:text-5xl">Mulai perjalanan filmmu di MovieHub</h2>
-          <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-white/65">
-            Daftar gratis dan rasakan rekomendasi film yang benar-benar memahami seleramu.
-          </p>
-          <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <Link to="/login" className="inline-flex items-center gap-2 rounded-2xl bg-white px-6 py-3 text-sm font-black text-black">
-              Masuk Sekarang
-            </Link>
-            <Link to="/register" className="inline-flex items-center gap-2 rounded-2xl border border-white/15 bg-white/[0.06] px-6 py-3 text-sm font-semibold text-white">
-              Daftar Gratis
-            </Link>
+        {/* ══ CTA PENUTUP ═════════════════════════════════════════════ */}
+        <section data-aos="zoom-in"
+          className="relative overflow-hidden rounded-[2rem] border border-white/[0.08] px-6 py-16 text-center md:px-10">
+          {/* Multi-layer background gradients */}
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-950/70 via-[#080810]/80 to-violet-950/50 backdrop-blur-sm" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-40 rounded-full bg-indigo-500/15 blur-3xl pointer-events-none" />
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-indigo-400/30 to-transparent" />
+          {/* Konten */}
+          <div className="relative z-10">
+            <div className="inline-flex items-center gap-2 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.25em] text-indigo-300 mb-6">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
+              Gratis Selamanya
+            </div>
+            <h2 className="text-4xl font-black md:text-5xl mb-4">Mulai perjalanan filmmu di MovieHub</h2>
+            <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-white/55 mb-8">
+              Daftar gratis dan rasakan rekomendasi film yang benar-benar memahami seleramu.
+            </p>
+            <div className="flex flex-wrap justify-center gap-3">
+              <Link to="/login" className="inline-flex items-center gap-2 rounded-2xl bg-white px-7 py-3.5 text-sm font-black text-black hover:-translate-y-0.5 hover:shadow-xl transition-all">
+                Masuk Sekarang <i className="fas fa-arrow-right" />
+              </Link>
+              <Link to="/register" className="inline-flex items-center gap-2 rounded-2xl border border-white/15 bg-white/[0.06] px-7 py-3.5 text-sm font-semibold text-white hover:bg-white/[0.1] transition-all backdrop-blur-sm">
+                Daftar Gratis <i className="fas fa-user-plus" />
+              </Link>
+            </div>
           </div>
         </section>
       </main>

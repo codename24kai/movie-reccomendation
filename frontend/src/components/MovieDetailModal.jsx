@@ -35,7 +35,7 @@ const MovieDetailModal = ({ movie, onClose }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isWatchedLoading, setIsWatchedLoading] = useState(false);
   const [isWatchlistLoading, setIsWatchlistLoading] = useState(false);
-  const [isLoadingStatus, setIsLoadingStatus] = useState(true);
+  const [isLoadingStatus, setIsLoadingStatus] = useState(false);
 
   // State untuk Trailer
   const [trailerCache, setTrailerCache] = useState(null);
@@ -61,25 +61,25 @@ const MovieDetailModal = ({ movie, onClose }) => {
 
   useEffect(() => {
     if (!userId || !finalMovieId) {
-      setIsLoadingStatus(false);
+      Promise.resolve().then(() => setIsLoadingStatus(false));
       return;
     }
 
     const checkUserInteraction = async () => {
-      setIsLoadingStatus(true);
+      Promise.resolve().then(() => setIsLoadingStatus(true));
       try {
         const res = await fetch(`${API_BASE_URL}/movie/${finalMovieId}/status/${userId}`);
         const data = await res.json();
 
         if (data.status === 'ok') {
           // PERBAIKAN 3: Jangan timpa status global dengan false jika API backend lambat update
-          setIsWatched(prev => isGloballyWatched || data.is_watched);
-          setIsInWatchlist(prev => isGloballyInWatchlist || data.is_in_watchlist);
+          setIsWatched(isGloballyWatched || data.is_watched);
+          setIsInWatchlist(isGloballyInWatchlist || data.is_in_watchlist);
           setRating(data.rating || 0);
           setReview(data.review || '');
         }
-      } catch (err) {
-        console.error("Gagal memuat status interaksi:", err);
+      } catch {
+        console.error("Gagal memuat status interaksi:");
       } finally {
         setIsLoadingStatus(false);
       }
@@ -168,7 +168,7 @@ const MovieDetailModal = ({ movie, onClose }) => {
         notifyCollectionChanged();
         setTimeout(() => onClose(), 800);
       }
-    } catch (err) {
+    } catch {
       setIsInWatchlist(prev);
       showToast('Gagal memperbarui watchlist', 'error');
     } finally {
@@ -186,6 +186,11 @@ const MovieDetailModal = ({ movie, onClose }) => {
         body: JSON.stringify({ user_id: userId, movie_id: finalMovieId, rating, review }),
       });
       if (response.ok) {
+        await fetch(`${API_BASE_URL}/watched`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId, movie_id: finalMovieId, action: 'add' }),
+        });
         showToast("Ulasan berhasil disimpan!", "success");
 
         // PERBAIKAN 4: Jadikan film otomatis "Ditonton" saat di-rate dan tutup modalnya
@@ -197,8 +202,8 @@ const MovieDetailModal = ({ movie, onClose }) => {
       } else {
         showToast("Gagal menyimpan ulasan", "error");
       }
-    } catch (err) {
-      console.error("Gagal mengirim rating:", err);
+    } catch {
+      console.error("Gagal mengirim rating:");
       showToast("Terjadi kesalahan koneksi", "error");
     } finally {
       setIsSubmitting(false);

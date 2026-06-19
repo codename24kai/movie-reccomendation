@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import FireflyBackground from '../components/Fireflybackground';
 import MovieCard from '../components/MovieCard';
 import MovieDetailModal from '../components/MovieDetailModal';
 import { API_BASE_URL } from '../config/api';
@@ -199,7 +200,9 @@ const Catalog = () => {
   const hasActiveFilters = searchQuery || selectedYearRange || minRating > 0 || selectedGenres.length > 0;
 
   return (
-    <div className="space-y-8 animate-fade-in pb-16 mt-4">
+    <div className="relative isolate space-y-8 animate-fade-in pb-16 mt-4">
+      <FireflyBackground />
+      <div className="relative z-10">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-white/[0.05] pb-6">
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full mb-3 bg-indigo-500/10 border border-indigo-500/20 text-[10px] font-bold text-indigo-400 uppercase tracking-widest">
@@ -377,6 +380,7 @@ const Catalog = () => {
           onClose={() => setSelectedMovie(null)}
         />
       )}
+      </div>
     </div>
   );
 };

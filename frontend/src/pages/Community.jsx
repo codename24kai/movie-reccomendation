@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
+import FireflyBackground from '../components/Fireflybackground';
+import ConfirmDialog from '../components/ConfirmDialog';
 import PostCard from '../components/Postcard';
 import PostDetailModal from '../components/PostDetailModal';
 import FriendListModal from '../components/FriendlistModal';
@@ -43,18 +45,23 @@ const Community = () => {
   const [composerTab, setComposerTab] = useState('discussion');
   const [composerText, setComposerText] = useState('');
   const [composerRating, setComposerRating] = useState(0);
-  
+
   const [mentionQuery, setMentionQuery] = useState('');
   const [movieSearchResults, setMovieSearchResults] = useState([]);
   const [taggedMovie, setTaggedMovie] = useState(null); // Menyimpan objek utuh bukan cuma ID
-  
+
   const [pollOptions, setPollOptions] = useState(['', '']); // Array of string (text poll) or object (movie poll)
   const [activePollInputIdx, setActivePollInputIdx] = useState(null);
-  
+
   const [notice, setNotice] = useState('');
   const [selectedPostId, setSelectedPostId] = useState(null);
-  const [profileUserId, setProfileUserId] = useState(null);
   const [friendListState, setFriendListState] = useState(null); // { userId, mode }
+  const [confirmState, setConfirmState] = useState({ isOpen: false, type: null, id: null, label: '' });
+
+  const showNotice = (text) => {
+    setNotice(text);
+    setTimeout(() => setNotice(''), 3000);
+  };
 
   // ── Fetch Initial Posts ──
   useEffect(() => {
@@ -96,7 +103,7 @@ const Community = () => {
   // ── Live Movie Search untuk Mention/Tag ──
   useEffect(() => {
     if (!mentionQuery.trim()) {
-      setMovieSearchResults([]);
+      Promise.resolve().then(() => setMovieSearchResults([]));
       return;
     }
     const timer = setTimeout(async () => {
@@ -126,7 +133,7 @@ const Community = () => {
   }, [sortedPosts, feedFilter]);
 
   // ── Bangun tree komentar nested (unlimited depth) dari struktur flat ──
-  const buildCommentTree = (postId) => {
+  const buildCommentTree = () => {
     const byParent = {};
     comments.forEach((c) => {
       const key = c.parent_comment_id ?? 'root';
@@ -155,19 +162,16 @@ const Community = () => {
     [selectedPostId, comments] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  const showNotice = (text) => {
-    setNotice(text);
-    setTimeout(() => setNotice(''), 3000);
-  };
-
   // ── Reset composer setiap ganti tab tipe postingan ──
   useEffect(() => {
-    setComposerText('');
-    setComposerRating(0);
-    setTaggedMovie(null);
-    setMentionQuery('');
-    setPollOptions(['', '']);
-    setActivePollInputIdx(null);
+    Promise.resolve().then(() => {
+      setComposerText('');
+      setComposerRating(0);
+      setTaggedMovie(null);
+      setMentionQuery('');
+      setPollOptions(['', '']);
+      setActivePollInputIdx(null);
+    });
   }, [composerTab]);
 
   // ── Handler: Posting baru ──
@@ -230,7 +234,7 @@ const Community = () => {
         body: JSON.stringify(payload)
       });
       const data = await res.json();
-      
+
       if (data.status === 'ok') {
         setPosts((prev) => [data.post, ...prev]);
         showNotice('Postingan berhasil dibuat.');
@@ -254,18 +258,18 @@ const Community = () => {
       showNotice('Silakan login untuk memberi reaksi.');
       return;
     }
-    
+
     // Optimistic Update
     setPosts((prev) =>
       prev.map((p) => {
         if (p.post_id !== postId) return p;
-        
+
         let newLikes = Array.isArray(p.likes) ? [...p.likes] : [];
         let newDislikes = Array.isArray(p.dislikes) ? [...p.dislikes] : [];
-        
+
         const hasLiked = newLikes.includes(currentUserId);
         const hasDisliked = newDislikes.includes(currentUserId);
-        
+
         if (type === 'like') {
           if (hasLiked) {
             newLikes = newLikes.filter(id => id !== currentUserId); // Toggle off
@@ -281,7 +285,7 @@ const Community = () => {
             newLikes = newLikes.filter(id => id !== currentUserId);
           }
         }
-        
+
         return { ...p, likes: newLikes, dislikes: newDislikes };
       })
     );
@@ -300,12 +304,12 @@ const Community = () => {
       showNotice('Silakan login untuk vote.');
       return;
     }
-    
+
     // Optimistic Update
     setPosts((prev) =>
       prev.map((p) => {
         if (p.post_id !== postId) return p;
-        
+
         const updatedOptions = p.poll_options.map(opt => {
           let votesArray = Array.isArray(opt.votes) ? [...opt.votes] : [];
           // Remove from all options first
@@ -316,7 +320,7 @@ const Community = () => {
           }
           return { ...opt, votes: votesArray };
         });
-        
+
         return { ...p, poll_options: updatedOptions, voted_option_id: optionId };
       })
     );
@@ -335,7 +339,7 @@ const Community = () => {
     setPosts((prev) =>
       prev.map((p) => (p.post_id === postId ? { ...p, content: newContent, updated_at: new Date().toISOString() } : p))
     );
-    
+
     fetch(`${API_BASE_URL}/community/posts/${postId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -344,12 +348,15 @@ const Community = () => {
   };
 
   const handleDeletePost = async (postId) => {
-    if (!window.confirm('Hapus postingan ini?')) return;
+    setConfirmState({ isOpen: true, type: 'post', id: postId, label: 'postingan ini' });
+  };
+
+  const confirmDeletePost = async (postId) => {
     
     // Optimistic update
     setPosts((prev) => prev.filter((p) => p.post_id !== postId));
     if (selectedPostId === postId) setSelectedPostId(null);
-    
+
     fetch(`${API_BASE_URL}/community/posts/${postId}`, {
       method: 'DELETE',
     }).catch(console.error);
@@ -374,7 +381,7 @@ const Community = () => {
         })
       });
       const data = await res.json();
-      
+
       if (data.status === 'ok') {
         setComments((prev) => [...prev, data.comment]);
         setPosts((prev) =>
@@ -401,10 +408,10 @@ const Community = () => {
         if (c.comment_id !== commentId) return c;
         let newLikes = Array.isArray(c.likes) ? [...c.likes] : [];
         let newDislikes = Array.isArray(c.dislikes) ? [...c.dislikes] : [];
-        
+
         const hasLiked = newLikes.includes(currentUserId);
         const hasDisliked = newDislikes.includes(currentUserId);
-        
+
         if (voteType === 'like') {
           if (hasLiked) newLikes = newLikes.filter(id => id !== currentUserId);
           else {
@@ -418,7 +425,7 @@ const Community = () => {
             newLikes = newLikes.filter(id => id !== currentUserId);
           }
         }
-        
+
         return { ...c, likes: newLikes, dislikes: newDislikes };
       })
     );
@@ -435,7 +442,7 @@ const Community = () => {
     setComments((prev) =>
       prev.map((c) => (c.comment_id === commentId ? { ...c, content: newContent, updated_at: new Date().toISOString() } : c))
     );
-    
+
     fetch(`${API_BASE_URL}/community/comments/${commentId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -444,7 +451,10 @@ const Community = () => {
   };
 
   const handleDeleteComment = (commentId) => {
-    if (!window.confirm('Hapus komentar ini? Balasan di bawahnya juga akan terhapus.')) return;
+    setConfirmState({ isOpen: true, type: 'comment', id: commentId, label: 'komentar ini' });
+  };
+
+  const confirmDeleteComment = (commentId) => {
 
     // Hapus comment beserta semua descendant-nya (rekursif) secara lokal
     const idsToDelete = new Set([commentId]);
@@ -465,7 +475,7 @@ const Community = () => {
         p.post_id === selectedPostId ? { ...p, comment_count: Math.max(0, (p.comment_count || 0) - idsToDelete.size) } : p
       )
     );
-    
+
     fetch(`${API_BASE_URL}/community/comments/${commentId}`, {
       method: 'DELETE',
     }).catch(console.error);
@@ -478,7 +488,9 @@ const Community = () => {
   }), [posts]);
 
   return (
-    <div className="grid gap-8 xl:grid-cols-[1fr_320px] pb-24 mt-4 animate-fade-in">
+    <div className="relative isolate grid gap-8 xl:grid-cols-[1fr_320px] pb-24 mt-4 animate-fade-in">
+      <FireflyBackground />
+      <div className="relative z-10">
       <section className="space-y-6">
 
         {/* Header */}
@@ -506,11 +518,10 @@ const Community = () => {
                   <button
                     key={tab.key}
                     onClick={() => setComposerTab(tab.key)}
-                    className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors ${
-                      composerTab === tab.key
+                    className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors ${composerTab === tab.key
                         ? 'bg-indigo-600 text-white'
                         : 'bg-white/[0.03] text-white/50 hover:bg-white/[0.06]'
-                    }`}
+                      }`}
                   >
                     <i className={`fas ${tab.icon} mr-2`} />
                     {tab.label}
@@ -529,8 +540,8 @@ const Community = () => {
                   composerTab === 'discussion'
                     ? 'Apa yang lagi kamu pikirkan tentang film hari ini?'
                     : composerTab === 'review'
-                    ? 'Tulis ulasanmu tentang film ini...'
-                    : 'Tulis pertanyaan untuk polling...'
+                      ? 'Tulis ulasanmu tentang film ini...'
+                      : 'Tulis pertanyaan untuk polling...'
                 }
                 className="min-h-[100px] w-full resize-none rounded-2xl border border-white/10 bg-white/[0.02] p-4 text-[15px] text-white outline-none placeholder:text-white/30 focus:border-indigo-500/40 custom-scrollbar"
               />
@@ -605,41 +616,41 @@ const Community = () => {
                           </div>
                         ) : (
                           <div className="relative flex-1">
-                             <input
-                                type="text"
-                                placeholder={`Ketik teks atau cari film untuk opsi #${idx + 1}`}
-                                value={optMovie || ''}
-                                onFocus={() => setActivePollInputIdx(idx)}
-                                onChange={async (e) => {
-                                  const q = e.target.value;
-                                  setPollOptions((prev) => prev.map((v, i) => (i === idx ? q : v)));
-                                  if(q.length > 2) {
-                                    const res = await fetch(`${API_BASE_URL}/movies/search?q=${encodeURIComponent(q)}&limit=5`);
-                                    const data = await res.json();
-                                    setMovieSearchResults(data.movies || data.results || []);
-                                  } else {
-                                    setMovieSearchResults([]);
-                                  }
-                                }}
-                                className="w-full rounded-full border border-white/10 bg-black/20 px-4 py-2.5 text-sm text-white outline-none focus:border-indigo-500/40"
-                              />
-                              {activePollInputIdx === idx && movieSearchResults.length > 0 && (
-                                <div className="absolute z-10 mt-1 w-full rounded-xl border border-white/10 bg-[#151520] shadow-xl overflow-hidden py-1">
-                                  {movieSearchResults.map((m, mIdx) => (
-                                    <button
-                                      key={mIdx}
-                                      onClick={() => {
-                                        setPollOptions((prev) => prev.map((v, i) => (i === idx ? m : v)));
-                                        setMovieSearchResults([]);
-                                        setActivePollInputIdx(null);
-                                      }}
-                                      className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-white/[0.06]"
-                                    >
-                                      <span className="text-sm text-white">{m.title}</span>
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
+                            <input
+                              type="text"
+                              placeholder={`Ketik teks atau cari film untuk opsi #${idx + 1}`}
+                              value={optMovie || ''}
+                              onFocus={() => setActivePollInputIdx(idx)}
+                              onChange={async (e) => {
+                                const q = e.target.value;
+                                setPollOptions((prev) => prev.map((v, i) => (i === idx ? q : v)));
+                                if (q.length > 2) {
+                                  const res = await fetch(`${API_BASE_URL}/movies/search?q=${encodeURIComponent(q)}&limit=5`);
+                                  const data = await res.json();
+                                  setMovieSearchResults(data.movies || data.results || []);
+                                } else {
+                                  setMovieSearchResults([]);
+                                }
+                              }}
+                              className="w-full rounded-full border border-white/10 bg-black/20 px-4 py-2.5 text-sm text-white outline-none focus:border-indigo-500/40"
+                            />
+                            {activePollInputIdx === idx && movieSearchResults.length > 0 && (
+                              <div className="absolute z-10 mt-1 w-full rounded-xl border border-white/10 bg-[#151520] shadow-xl overflow-hidden py-1">
+                                {movieSearchResults.map((m, mIdx) => (
+                                  <button
+                                    key={mIdx}
+                                    onClick={() => {
+                                      setPollOptions((prev) => prev.map((v, i) => (i === idx ? m : v)));
+                                      setMovieSearchResults([]);
+                                      setActivePollInputIdx(null);
+                                    }}
+                                    className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-white/[0.06]"
+                                  >
+                                    <span className="text-sm text-white">{m.title}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )}
 
@@ -691,11 +702,10 @@ const Community = () => {
             <button
               key={f.key}
               onClick={() => setFeedFilter(f.key)}
-              className={`rounded-full border px-4 py-2 text-sm font-bold transition-all ${
-                feedFilter === f.key
+              className={`rounded-full border px-4 py-2 text-sm font-bold transition-all ${feedFilter === f.key
                   ? 'border-indigo-400 bg-indigo-500 shadow-lg shadow-indigo-500/20 text-white'
                   : 'border-white/10 bg-white/5 text-white/50 hover:bg-white/10 hover:text-white'
-              }`}
+                }`}
             >
               <i className={`fas ${f.icon} mr-2`} />
               {f.label}
@@ -798,10 +808,25 @@ const Community = () => {
           onClose={() => setFriendListState(null)}
           onOpenProfile={(uid) => {
             setFriendListState(null);
-            setProfileUserId(uid);
+            window.location.href = `/user/${uid}`;
           }}
         />
       )}
+      <ConfirmDialog
+        isOpen={confirmState.isOpen}
+        title="Konfirmasi Hapus"
+        message={`Yakin mau menghapus ${confirmState.label}? Tindakan ini tidak bisa dibatalkan.`}
+        confirmText="Ya, Hapus"
+        cancelText="Batal"
+        variant="danger"
+        onConfirm={() => {
+          if (confirmState.type === 'post') confirmDeletePost(confirmState.id);
+          if (confirmState.type === 'comment') confirmDeleteComment(confirmState.id);
+          setConfirmState({ isOpen: false, type: null, id: null, label: '' });
+        }}
+        onCancel={() => setConfirmState({ isOpen: false, type: null, id: null, label: '' })}
+      />
+      </div>
     </div>
   );
 };

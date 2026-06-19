@@ -1,81 +1,81 @@
-import { useState, useEffect } from 'react';
-import MovieCard from './MovieCard';
+import { useState, useEffect, useContext } from 'react';
+import { AuthContext } from '../context/AuthContext';
 import { API_BASE_URL } from '../config/api';
+import MovieCard from './MovieCard';
 
-const RecommendedSection = ({ userId }) => {
+const RecommendedSection = () => {
+  const { user } = useContext(AuthContext);
   const [movies, setMovies] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const activeUser = user || JSON.parse(localStorage.getItem('user') || '{}');
+  const userId = activeUser?.user_id || activeUser?.id;
 
   useEffect(() => {
+    if (!userId) return;
+
     const fetchRecommendations = async () => {
+      setIsLoading(true);
       try {
-        setLoading(true);
-        const response = await fetch(`${API_BASE_URL}/recommend`, {
+        // PERBAIKAN: Gunakan POST body sesuai kebutuhan endpoint /recommend di Flask
+        const res = await fetch(`${API_BASE_URL}/recommend`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            user_id: userId,
-            top_n: 6,         // Ambil 6 film terbaik agar pas dengan grid UI
+            user_id: Number(userId),
+            top_n: 12,
             svd_weight: 0.5,
             rf_weight: 0.5
-          }),
+          })
         });
-
-        if (!response.ok) {
-          throw new Error('Gagal mengambil data dari server. Pastikan Flask berjalan.');
-        }
-
-        const data = await response.json();
-        
-        // Cek status "ok" dari response Backend Flask
+        const data = await res.json();
         if (data.status === 'ok') {
-          setMovies(data.recommendations);
-        } else {
-          throw new Error(data.message || 'Terjadi kesalahan pada model rekomendasi.');
+          setMovies(data.recommendations || []);
         }
       } catch (err) {
-        setError(err.message);
+        console.error('Gagal mengambil data rekomendasi:', err);
       } finally {
-        setLoading(false);
+        setIsLoading(false);
       }
     };
 
-    if (userId) {
-      fetchRecommendations();
-    }
+    fetchRecommendations();
   }, [userId]);
 
+  if (!userId) return null;
+
   return (
-    <section data-purpose="recommended-movies">
+    <section className="py-8">
       <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center space-x-6">
-          <h3 className="text-xl font-bold">Recommended for You</h3>
-          <div className="flex space-x-2">
-            <span className="px-4 py-1.5 bg-zinc-800 text-zinc-400 text-xs font-semibold rounded-full border border-white/5 cursor-pointer hover:bg-zinc-700 transition-colors">Based on Rating</span>
-            <span className="px-4 py-1.5 bg-zinc-800 text-zinc-400 text-xs font-semibold rounded-full border border-white/5 cursor-pointer hover:bg-zinc-700 transition-colors">Based on Genre</span>
-          </div>
-        </div>
-        <div className="flex space-x-2">
-          <button className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white border border-white/5"><i className="fas fa-chevron-left text-xs"></i></button>
-          <button className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white border border-white/5"><i className="fas fa-chevron-right text-xs"></i></button>
+        <div>
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <i className="fas fa-magic text-indigo-500 text-lg"></i> Rekomendasi Untuk Anda
+          </h2>
+          <p className="text-xs text-white/50 mt-1">Dihitung menggunakan algoritma cerdas berdasarkan preferensi Anda.</p>
         </div>
       </div>
 
-      {loading && <div className="text-zinc-400 animate-pulse">Menghitung model rekomendasi...</div>}
-      {error && <div className="text-red-500 text-sm">{error}</div>}
-
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
-        {!loading && !error && movies.length > 0 ? (
-          movies.map((movie) => (
-            <MovieCard key={movie.movieId} movie={movie} />
-          ))
-        ) : (
-          !loading && !error && <p className="text-zinc-400">Tidak ada rekomendasi film saat ini.</p>
-        )}
-      </div>
+      {isLoading ? (
+        <div className="flex justify-center py-12">
+          <i className="fas fa-circle-notch fa-spin text-indigo-500 text-2xl"></i>
+        </div>
+      ) : movies.length === 0 ? (
+        <div className="text-center py-12 text-white/30 text-sm bg-white/[0.02] border border-white/5 rounded-2xl">
+          Belum ada rekomendasi. Berikan rating film terlebih dahulu agar sistem mempelajari kesukaan Anda!
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          {movies.map((movie, index) => (
+            <MovieCard
+              // PERBAIKAN MUTLAK: Kombinasikan movie_id dengan index untuk membuang bug duplikasi React Virtual DOM
+              key={`${movie.movie_id || movie.movieId || movie.tmdb_id}-${index}`}
+              movie={movie}
+            />
+          ))}
+        </div>
+      )}
     </section>
   );
 };

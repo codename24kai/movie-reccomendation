@@ -1,41 +1,18 @@
-import { useState, useContext } from 'react';
-import { AuthContext } from '../context/AuthContext';
-import { API_BASE_URL } from '../config/api';
-
 const MovieCard = ({ movie, onClickDetail }) => {
-  const { user } = useContext(AuthContext);
-  const [isWatchlisted, setIsWatchlisted] = useState(false);
-  const [watchlistLoading, setWatchlistLoading] = useState(false);
-
-  const movieId = movie.movieId ?? movie.movie_id;
-
-  const handleWatchlist = async (e) => {
-    e.stopPropagation(); // Mencegah klik tombol ikut membuka modal detail
-    if (!user) return;
-    if (watchlistLoading) return;
-
-    setWatchlistLoading(true);
-    const prev = isWatchlisted;
-    setIsWatchlisted(!prev);
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/watchlist`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: user.user_id ?? user.id, movie_id: movieId }),
-      });
-      const data = await response.json();
-      if (data.status === 'ok') {
-        setIsWatchlisted(data.is_added);
-      } else {
-        setIsWatchlisted(prev); // rollback
-      }
-    } catch {
-      setIsWatchlisted(prev); // rollback
-    } finally {
-      setWatchlistLoading(false);
-    }
+  const recommendationSource = movie._recommendation_source || movie.recommendation_source || movie.source;
+  const sourceLabelMap = {
+    hybrid: 'Hybrid',
+    personal: 'Hybrid',
+    genre: 'Genre Match',
+    recent: 'Recent Watch',
+    fresh: 'Fresh Pick',
+    fallback: 'Popular',
+    tmdb: 'TMDB',
+    popular: 'Popular',
   };
+  const sourceLabel = recommendationSource
+    ? sourceLabelMap[String(recommendationSource).toLowerCase()] || null
+    : null;
 
   const genres = movie.genres
     ? movie.genres.replace(/\|/g, ' · ')
@@ -72,6 +49,13 @@ const MovieCard = ({ movie, onClickDetail }) => {
 
         {/* ── Poster ── */}
         <div className="aspect-[2/3] relative overflow-hidden bg-[#0f0f18]">
+          {sourceLabel && (
+            <div className="absolute left-2 top-2 z-10">
+              <span className="inline-flex items-center rounded-full border border-white/10 bg-black/55 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.18em] text-white/80 backdrop-blur-sm">
+                {sourceLabel}
+              </span>
+            </div>
+          )}
           <img
             src={posterUrl}
             alt={movie.title}
