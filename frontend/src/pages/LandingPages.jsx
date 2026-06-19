@@ -7,6 +7,24 @@ import FireflyBackground from '../components/Fireflybackground';
 import heroImage1 from '../assets/landing-page/landing-page-1.jpg';
 import heroImage2 from '../assets/landing-page/landing-page-2.jpg';
 import heroImage3 from '../assets/landing-page/landing-page-3.png';
+import heroImage4 from '../assets/landing-page/landing-page-4.jpg';
+import heroImage5 from '../assets/landing-page/landing-page-5.jpg';
+import heroImage6 from '../assets/landing-page/landing-page-6.jpg';
+import heroImage7 from '../assets/landing-page/landing-page-7.jpg';
+import heroImage8 from '../assets/landing-page/landing-page-8.jpg';
+import heroImage9 from '../assets/landing-page/landing-page-9.jpeg';
+import heroImage10 from '../assets/landing-page/landing-page-10.jpg';
+import heroImage11 from '../assets/landing-page/landing-page-11.jpg';
+
+import poster1 from '../assets/poster/poster1.jpg';
+import poster2 from '../assets/poster/poster2.jpg';
+import poster3 from '../assets/poster/poster3.jpg';
+import poster4 from '../assets/poster/poster4.jpg';
+import poster5 from '../assets/poster/poster5.jpg';
+import poster6 from '../assets/poster/poster6.jpg';
+import poster7 from '../assets/poster/poster7.jpg';
+import poster8 from '../assets/poster/poster8.jpg';
+import poster9 from '../assets/poster/poster9.jpg';
 
 // ── Custom count-up hook ─────────────────────────────────────────
 const useCountUp = (target, { duration = 2000, startOnView = true } = {}) => {
@@ -50,24 +68,34 @@ const HERO_SLIDES = [
   { image: heroImage1, title: 'Malam ini, temukan film yang terasa dibuat untukmu.', subtitle: 'MovieHub memadukan rekomendasi AI, komunitas aktif, dan koleksi film yang terus bertumbuh.' },
   { image: heroImage2, title: 'Simpan tontonan, tandai yang sudah selesai, lihat progresmu.', subtitle: 'Kelola watchlist dan watched list dalam satu pengalaman yang elegan dan mudah dipakai.' },
   { image: heroImage3, title: 'Diskusi film yang hidup, review yang jujur, voting yang seru.', subtitle: 'Bersama komunitas, setiap film bisa punya percakapan yang lebih dalam.' },
+  { image: heroImage4, title: 'Diskusi film yang hidup, review yang jujur, voting yang seru.', subtitle: 'Bersama komunitas, setiap film bisa punya percakapan yang lebih dalam.' },
+  { image: heroImage5, title: 'Diskusi film yang hidup, review yang jujur, voting yang seru.', subtitle: 'Bersama komunitas, setiap film bisa punya percakapan yang lebih dalam.' },
+  { image: heroImage6, title: 'Diskusi film yang hidup, review yang jujur, voting yang seru.', subtitle: 'Bersama komunitas, setiap film bisa punya percakapan yang lebih dalam.' },
+  { image: heroImage7, title: 'Diskusi film yang hidup, review yang jujur, voting yang seru.', subtitle: 'Bersama komunitas, setiap film bisa punya percakapan yang lebih dalam.' },
+  { image: heroImage8, title: 'Diskusi film yang hidup, review yang jujur, voting yang seru.', subtitle: 'Bersama komunitas, setiap film bisa punya percakapan yang lebih dalam.' },
+  { image: heroImage9, title: 'Diskusi film yang hidup, review yang jujur, voting yang seru.', subtitle: 'Bersama komunitas, setiap film bisa punya percakapan yang lebih dalam.' },
+  { image: heroImage10, title: 'Diskusi film yang hidup, review yang jujur, voting yang seru.', subtitle: 'Bersama komunitas, setiap film bisa punya percakapan yang lebih dalam.' },
+  { image: heroImage11, title: 'Diskusi film yang hidup, review yang jujur, voting yang seru.', subtitle: 'Bersama komunitas, setiap film bisa punya percakapan yang lebih dalam.' },
 ];
 const SLIDE_DURATION = 4000;
 
 // ── Poster collage ───────────────────────────────────────────────
 const POSTERS = [
-  { title: 'Interstellar', src: '/assets/posters/poster1.jpg' },
-  { title: 'Dune', src: '/assets/posters/poster2.jpg' },
-  { title: 'Oppenheimer', src: '/assets/posters/poster3.jpg' },
-  { title: 'Parasite', src: '/assets/posters/poster4.jpg' },
-  { title: 'Blade Runner 2049', src: '/assets/posters/poster5.jpg' },
-  { title: 'Her', src: '/assets/posters/poster6.jpg' },
-  { title: 'Inception', src: '/assets/posters/poster7.jpg' },
-  { title: 'Arrival', src: '/assets/posters/poster8.jpg' },
-  { title: 'La La Land', src: '/assets/posters/poster9.jpg' },
+  { title: 'Poster 1', src: poster1 },
+  { title: 'Poster 2', src: poster2 },
+  { title: 'Poster 3', src: poster3 },
+  { title: 'Poster 4', src: poster4 },
+  { title: 'Poster 5', src: poster5 },
+  { title: 'Poster 6', src: poster6 },
+  { title: 'Poster 7', src: poster7 },
+  { title: 'Poster 8', src: poster8 },
+  { title: 'Poster 9', src: poster9 },
+  { title: 'Poster 1', src: poster1 },
+  { title: 'Poster 2', src: poster2 },
 ];
 
 // ── Stats ────────────────────────────────────────────────────────
-const STATS_FALLBACK = { total_movies: 10000, total_users: 1200, total_ratings: 8500, total_reviews: 2100, total_threads: 640 };
+const STATS_FALLBACK = { total_movies: 80000, total_users: 5, total_ratings: 12, total_reviews: 4, total_threads: 640 };
 const STAT_CONFIG = [
   { key: 'total_movies', label: 'Koleksi Film', suffix: '+', icon: 'fa-film', color: 'from-indigo-500/20 to-indigo-500/5', iconColor: 'text-indigo-300', border: 'border-indigo-500/15' },
   { key: 'total_users', label: 'Pengguna', suffix: '+', icon: 'fa-users', color: 'from-pink-500/20 to-pink-500/5', iconColor: 'text-pink-300', border: 'border-pink-500/15' },
@@ -494,20 +522,30 @@ const LandingPages = () => {
           </div>
         </section>
 
-        {/* ══ POSTER COLLAGE ══════════════════════════════════════════ */}
+        {/* ══ POSTER COLLAGE  ══════════════════════════════════ */}
         <section data-aos="fade-up" className="relative overflow-hidden rounded-[2rem] border border-white/[0.07] bg-[#080810]/50 p-6 md:p-10 backdrop-blur-sm">
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-          <div className="mb-6 flex items-end justify-between gap-4">
+
+          <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
-              <span className="text-xs font-bold uppercase tracking-[0.35em] text-white/30">Poster Collage</span>
-              <h2 className="mt-2 text-2xl font-black md:text-3xl">Koleksi film yang terus bertumbuh.</h2>
+              <span className="text-xs font-bold uppercase tracking-[0.35em] text-indigo-400">Koleksi Kurasi</span>
+              <h2 className="mt-2 text-2xl font-black md:text-3xl text-white">Temukan film terbaik setiap harinya.</h2>
             </div>
-            <Link to="/register" className="text-sm font-semibold text-indigo-300 hover:text-indigo-200 whitespace-nowrap transition-colors flex items-center gap-1">
-              Jelajahi semua <i className="fas fa-arrow-right text-xs" />
+            <Link to="/catalog" className="text-sm font-semibold text-indigo-300 hover:text-white transition-colors flex items-center gap-1">
+              Lihat Katalog <i className="fas fa-arrow-right text-xs" />
             </Link>
           </div>
-          <div className="grid grid-cols-3 gap-3 md:grid-cols-4 lg:grid-cols-5 md:gap-4">
-            {POSTERS.map((poster) => <PosterTile key={poster.title} poster={poster} />)}
+
+          {/* Grid yang responsif dan estetik */}
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+            {POSTERS.map((poster, index) => (
+              <div
+                key={poster.title}
+                className={index >= 5 ? 'hidden lg:block' : ''} // Sembunyikan poster ke-6 dst pada layar kecil agar rapi
+              >
+                <PosterTile poster={poster} />
+              </div>
+            ))}
           </div>
         </section>
 
